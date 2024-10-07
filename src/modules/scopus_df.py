@@ -3,32 +3,33 @@ import bibtexparser
 import re
 
 """
-    Convierte un archivo BibTeX a un DataFrame de pandas.
+    Converts a BibTeX file into a pandas DataFrame.
 
-    Esta función lee un archivo BibTeX, extrae sus entradas y las convierte
-    en un DataFrame, organizando las columnas según un mapeo predefinido,
-    extrae el país de afiliación de las entradas siempre que esté disponible y
-    cambia el formato de los autores de "AND" a ";"
+    This function reads a BibTeX file, extracts its entries, and converts
+    them into a DataFrame, organizing the columns according to a predefined mapping.
+    It extracts the affiliation country from the entries whenever available and
+    changes the authors' format from "AND" to ";".
 
-    Parámetros:
+    Parameters:
     ----------
     file_path : str
-        Ruta del archivo BibTeX a leer.
+        Path to the BibTeX file to be read.
 
-    Retorna:
+    Returns:
     -------
     pd.DataFrame
-        Un DataFrame de pandas que contiene las entradas del archivo BibTeX.
-        Si ocurre un error durante la lectura o el análisis, retorna None.
+        A pandas DataFrame containing the entries from the BibTeX file.
+        If an error occurs during reading or parsing, it returns None.
     
-    Excepciones:
-    ------------
-    - FileNotFoundError: Si el archivo no se encuentra en la ruta especificada.
-    - UnicodeDecodeError: Si hay un error de codificación al intentar leer el archivo.
-    - bibtexparser.BibTexParserError: Si hay un error al analizar el archivo BibTeX.
-    - KeyError: Si se intenta acceder a una clave no existente en un diccionario.
-    - ValueError: Si se encuentra un valor no válido.
-    - TypeError: Si se pasa un argumento de tipo inapropiado.
+    Exceptions:
+    -----------
+    - FileNotFoundError: If the file is not found at the specified path.
+    - UnicodeDecodeError: If there is an encoding error while attempting to read the file.
+    - bibtexparser.BibTexParserError: If an error occurs while parsing the BibTeX file.
+    - KeyError: If trying to access a non-existent key in a dictionary.
+    - ValueError: If an invalid value is encountered.
+    - TypeError: If an argument of an inappropriate type is passed.
+
 """
 def bib_to_df(file_path):
      
@@ -57,7 +58,7 @@ def bib_to_df(file_path):
         'ID': 'USERS',
         'publisher': 'PU',
         'funding_text_1': 'FU',
-        'funding_details': 'FU_DETAILS',
+        'funding_details': 'F_DETAILS',
         'keywords': 'ID',
         'art_number': 'ART NUMBER',
         'isbn': 'BN',
@@ -69,12 +70,12 @@ def bib_to_df(file_path):
         'chemicals_cas': 'CHEMICAL_CAS'
     }
     
-    # Solamente para poder previsualizar las columnas en un orden más específico
+    # Only to preview the columns in a more specific order
     column_order = [
     'AU', 'DE', 'ID', 'C1',
-    'CR', 'PG', 'PAGES','AB', 'SN',
+    'CR', 'PG', 'BP', 'EP','AB', 'SN',
     'TI', 'ART NUMBER', 'SP', 'CODEN',
-    'PU', 'FUNDING', 'DT', 'ENTRY_TYPE', 'PMID',
+    'PU', 'FU', 'DT', 'ENTRY_TYPE', 'PMID',
     'CHEMICAL_CAS', 'USERS', 'NUM', 'BN',
     'VL', 'DOI', 'LA', 'URL',
     'PR', 'JNL', 'ABR', 'AFF',
@@ -96,10 +97,10 @@ def bib_to_df(file_path):
             for i in entry:
                 entry_data[i] = entry.get(i, '').upper()
                 for i in list(entry_data):
-                    # Cambiar 'AND' por ';' en la lista de autores
+                    # Change 'AND' to ';' in the author list
                     if i == 'author':
                         entry_data[i] = entry_data[i].replace(' AND ', ';')
-                    # Extraer el país de afiliación
+                    # Extract the affiliation country
                     elif i == 'affiliation':
                         affiliation = entry_data[i]
                         match = re.search(r',\s*([A-Z ]+)$', affiliation)
@@ -108,8 +109,11 @@ def bib_to_df(file_path):
 
 
         df = pd.DataFrame(entries_data)
-
+        
         df.rename(columns=column_mapping, inplace=True)
+        
+        df[['BP', 'EP']] = df['PAGES'].str.split('-', expand=True)
+        df.drop(columns=['PAGES'], inplace=True)
         df = df[column_order]
 
         return df
@@ -118,8 +122,6 @@ def bib_to_df(file_path):
         print(f"El archivo {file_path} no se encuentra.")
     except UnicodeDecodeError:
         print(f"Error de codificación al intentar leer el archivo {file_path}.")
-    except bibtexparser.BibTexParserError as e:
-        print(f"Error al analizar el archivo BibTeX: {e}")
     except KeyError as e:
         print(f"Clave no encontrada: {e}")
     except ValueError as e:
