@@ -103,8 +103,13 @@ def bib_to_df(file_path):
                     # Extract the affiliation country
                     elif i == 'affiliation':
                         affiliation = entry_data[i]
-                        match = re.search(r',\s*([A-Z ]+)$', affiliation)
-                        entry_data['COUNTRY_AFILIATION'] = match.group(1) if match else ''
+                        countries = []
+                        # Split by ";", find the last part after the comma which should be a country
+                        for aff in affiliation.split(";"):
+                            match = re.search(r',\s*([A-Z\s]+)$', aff.strip())
+                            if match:
+                                countries.append(match.group(1))
+                        entry_data['COUNTRY_AFILIATION'] = "; ".join(countries) if countries else ''
             entries_data.append(entry_data)
 
 
