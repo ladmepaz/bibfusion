@@ -1,5 +1,6 @@
 import pandas as pd
 import bibtexparser
+from collections import defaultdict
 import re
 
 """
@@ -103,13 +104,23 @@ def bib_to_df(file_path):
                     # Extract the affiliation country
                     elif i == 'affiliation':
                         affiliation = entry_data[i]
-                        countries = []
-                        # Split by ";", find the last part after the comma which should be a country
-                        for aff in affiliation.split(";"):
-                            match = re.search(r',\s*([A-Z\s]+)$', aff.strip())
-                            if match:
-                                countries.append(match.group(1))
-                        entry_data['COUNTRY_AFILIATION'] = "; ".join(countries) if countries else ''
+                        # Modified the regular expression to capture all countries.
+                        match = re.findall(r'\b([A-Z\s]+(?:[ -][A-Z\s]+)*)\b(?=\s*(?:;|$))', affiliation)
+                        countries_count = defaultdict(int)
+
+                        # Counting occurrences of each country.
+                        for country in match:
+                            country_clean = country.strip()
+                            countries_count[country_clean] += 1
+                            
+                        # The formatted country string is constructed.
+                        formatted_countries = []
+                        for country, count in countries_count.items():
+                            if count > 1:
+                                formatted_countries.append(f"{country}({count})")
+                            else:
+                                formatted_countries.append(country)
+                        entry_data['COUNTRY_AFILIATION'] = '; '.join(formatted_countries)
             entries_data.append(entry_data)
 
 
