@@ -86,6 +86,9 @@ def bib_to_df(file_path):
 
 
     try:
+        abbreviations_file = 'tests/files/country.csv'
+        abbreviations_df = pd.read_csv(abbreviations_file, sep='; ', header=None, encoding='ISO-8859-1', engine='python')
+        abbreviations_dict = dict(zip(abbreviations_df[0], abbreviations_df[1]))
         with open(file_path, 'r', encoding='utf-8') as bibfile:
             bibtex_str = bibfile.read()
         
@@ -110,8 +113,14 @@ def bib_to_df(file_path):
 
                         # Counting occurrences of each country.
                         for country in match:
-                            country_clean = country.strip()
-                            countries_count[country_clean] += 1
+                            country = country.strip()
+                            
+                            country_fullname = abbreviations_dict.get(country)
+    
+                            if country_fullname:  # Verifica si se encontró el nombre completo
+                                countries_count[country_fullname.upper()] += 1
+                            else:
+                                countries_count[country] = countries_count.get(country, 0) + 1
                             
                         # The formatted country string is constructed.
                         formatted_countries = []
@@ -135,9 +144,9 @@ def bib_to_df(file_path):
         return df
     
     except FileNotFoundError:
-        print(f"El archivo {file_path} no se encuentra.")
+        print(f"El archivo {file_path} o {abbreviations_file} no se encuentra.")
     except UnicodeDecodeError:
-        print(f"Error de codificación al intentar leer el archivo {file_path}.")
+        print(f"Error de codificación al intentar leer el archivo {file_path} o {abbreviations_file}.")
     except KeyError as e:
         print(f"Clave no encontrada: {e}")
     except ValueError as e:
