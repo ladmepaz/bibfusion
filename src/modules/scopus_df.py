@@ -99,7 +99,11 @@ def bib_to_df(file_path):
         for entry in library.entries:
             entry_data = {}
             for i in entry:
-                entry_data[i] = entry.get(i, '').upper()
+                if i == 'url':
+                    entry_data[i] = entry.get(i, '')
+                else:
+                    entry_data[i] = entry.get(i, '').upper()
+
                 for i in list(entry_data):
                     # Change 'AND' to ';' in the author list
                     if i == 'author':
@@ -117,7 +121,7 @@ def bib_to_df(file_path):
                             
                             country_fullname = abbreviations_dict.get(country)
     
-                            if country_fullname:  # Verifica si se encontró el nombre completo
+                            if country_fullname:
                                 countries_count[country_fullname.upper()] += 1
                             else:
                                 countries_count[country] = countries_count.get(country, 0) + 1
