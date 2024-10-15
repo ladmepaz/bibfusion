@@ -11,11 +11,13 @@ def wos_df(ruta_txt):
     :return: DataFrame - Un DataFrame que contiene los datos extraídos del archivo.
     """
     # Crear listas para almacenar los datos
-    columns = ["PT", "AU", "AF", "TI", "SO", "LA", "DT", "DE", "ID", "AB", 
-               "C1", "RP", "EM", "RI", "OI", "NR", "TC", "Z9", "U1", "U2", 
-               "PU", "PI", "PA", "SN", "EI", "J9", "JI", "PD", "PY", "VL", 
-               "IS", "SI", "BP", "EP", "DI", "PG", "WC", "WE", "SC", "GA", 
-               "UT", "OA", "DA"]
+    columns = ["AU", "AF", "CR", "AB", "AR", "BP", "C1", "C3", "CL", "CT", "CY",
+               "DA", "DE", "DI", "DT", "EA", "EF", "EI", "EM", "EP", "ER", "FU",
+               "FX", "GA", "HC", "HO", "HP", "ID", "IS", "J9", "JI", "LA", "MA",
+               "NR", "OA", "OI", "PA", "PD", "PG", "PI", "PM", "PN", "PT", "PU",
+               "PY", "RI", "RP", "SC", "SI", "SN", "SO", "SP", "SU", "TC", "TI",
+               "U1", "U2", "UT", "VL", "WC", "WE", "Z9", "DB", "AU_UN", "AU1_UN",
+               "AU_UN_NR", "SR_FULL_SR", "AU_CO"]
     data = {col: [] for col in columns}
 
     # Leer el archivo de texto
