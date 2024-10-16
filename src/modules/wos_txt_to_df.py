@@ -1,5 +1,3 @@
-# wos_txt_to_df.py
-
 import pandas as pd
 import re
 import os
@@ -29,14 +27,14 @@ def wos_txt_to_df(file_path):
             raise ValueError(f"The file '{file_path}' is not a .txt file.")
 
         # Open the file and read the first few lines to validate content
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, 'r', encoding='utf-8-sig') as f:
             first_lines = [next(f).strip() for _ in range(5)]
             # Check for expected WoS markers
             if not any(line.startswith('FN ') for line in first_lines) or not any(line.startswith('VR ') for line in first_lines):
                 raise ValueError(f"The file '{file_path}' does not appear to be a valid Web of Science (WoS) text file.")
 
         # Re-open the file to start processing from the beginning
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, 'r', encoding='utf-8-sig') as f:
             # Initialize variables
             records = []
             current_record = {}
@@ -218,3 +216,11 @@ def wos_txt_to_df(file_path):
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
         return None
+
+if __name__ == '__main__':
+    # Example usage
+    df = wos_txt_to_df('wos.txt')
+    if df is not None:
+        print(df.head())
+    else:
+        print("Failed to create DataFrame from the given file.")
