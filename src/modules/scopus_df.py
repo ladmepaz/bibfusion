@@ -1,6 +1,5 @@
 import pandas as pd
 import bibtexparser
-from collections import defaultdict
 import re
 
 """
@@ -22,7 +21,6 @@ import re
         A pandas DataFrame containing the entries from the BibTeX file, organized into columns defined by `column_mapping` and `column_order`.
         If an error occurs during reading or parsing, it returns None.
 """
-
 
 def bib_to_df(file_path):
      
@@ -78,8 +76,6 @@ def bib_to_df(file_path):
     'AU_UN_NR', 'SR_FULL', 'SR', 'AU_CO'
     ]
 
-
-
     try:
         abbreviations_file = 'tests/files/country.csv'
         abbreviations_df = pd.read_csv(abbreviations_file, sep='; ', header=None, encoding='utf-8', engine='python')
@@ -88,7 +84,7 @@ def bib_to_df(file_path):
             bibtex_str = bibfile.read()
         
         library = bibtexparser.loads(bibtex_str)
-
+        
         entries_data = []
 
         for entry in library.entries:
@@ -98,15 +94,6 @@ def bib_to_df(file_path):
                 
                 if i == 'url':
                     entry_data[i] = entry.get(i, '')
-                # Concatenate multiple 'funding_details' entries
-                if i == 'funding_details':
-                    current_funding = entry.get(i, '').strip()
-
-                    if 'funding_details' in entry_data:
-                        # Concatenate the new funding detail with the existing one
-                        entry_data['funding_details'] = entry_data['funding_details'] + '; ' + current_funding
-                    else:
-                        entry_data['funding_details'] = current_funding
                 # Change 'AND' to ';' in the author list
                 elif i == 'author':
                     entry_data[i] = entry_data[i].replace(' AND ', ';')
@@ -125,7 +112,6 @@ def bib_to_df(file_path):
                     universities = [univ.strip() for univ in universities]  # Clean up the university names
                     entry_data['AU_UN'] = '; '.join(universities).upper() 
                     
-                    
                     universities = entry_data['AU_UN'].split(';')
                     
                     entry_data['AU1_UN'] = universities[0].strip() if universities else ''
@@ -140,7 +126,7 @@ def bib_to_df(file_path):
             entry_data['SR'] = f"{first_author}; {entry_data['year']}; {entry_data['abbrev_source_title']}"
 
             entries_data.append(entry_data)
-
+        
         df = pd.DataFrame(entries_data)
         
         df.rename(columns=column_mapping, inplace=True)
