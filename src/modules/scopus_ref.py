@@ -1,11 +1,6 @@
 import pandas as pd
 import re
-import pickle
 import numpy as np
-import os
-
-
-os.chdir(os.path.dirname(__file__))  # Cambia al directorio donde está el script
 
 
 def scopus_refs(dataframe):
@@ -43,7 +38,7 @@ def scopus_refs(dataframe):
         cr_ref = referencia
 
         # Detectar el tipo de referencia
-        tipo = "Unknown"
+        tipo = "Other"
         autores, year, titulo, journal = None, None, None, None
 
         # Verificar si es Tipo 2 (Año justo después de los autores)
@@ -104,17 +99,15 @@ def scopus_refs(dataframe):
 
     df_nuevo.insert(0, 'SR', df['SR'])
     # Guardar el resultado en un nuevo archivo si es necesario
-    df_nuevo.to_excel('datos_extraidos_con_tipos.xlsx', index=False)
+    #df_nuevo.to_excel('datos_extraidos_con_tipos.xlsx', index=False)
     return df_nuevo
 
 
-# Cargar el archivo Excel
-file_path = 'dataframe\\all_data_EM_bibx.xlsx'
+# URL del Google Sheet exportado como CSV
+google_sheet_url = 'https://docs.google.com/spreadsheets/d/15I7DNXFtvT3N5ELQ6l5rXD51r5d8T9TtgPmDvdGGMnI/export?format=csv&gid=227674128'
 
-sheet_name = 'scopus'
-
-# Cargar solo la hoja especificada
-df = pd.read_excel(file_path, sheet_name=sheet_name)
+# Cargar los datos en un DataFrame
+df = pd.read_csv(google_sheet_url)
 
 df_ref = scopus_refs(df)
-print(df_ref)
+print(df)
