@@ -1,6 +1,6 @@
 import pandas as pd
 
-def remove_duplicates(file_path: str) -> pd.DataFrame:
+def remove_duplicates(file_path: str, search: int = 1) -> pd.DataFrame:
     """
     Remove duplicate rows based on DOI ('DI') and Title ('TI') columns from an Excel file,
     while preserving rows where either DOI or Title cells are empty.
@@ -9,6 +9,9 @@ def remove_duplicates(file_path: str) -> pd.DataFrame:
     ----------
     file_path : str
         The file path of the Excel file to read and process.
+    search : int (default value = 1)
+        Select the method for search the file. The default value is 1 (it means that the file,
+        is storaged locally.) But if search = 2, the search is going to be through web-scrapping.
 
     Returns
     -------
@@ -34,8 +37,12 @@ def remove_duplicates(file_path: str) -> pd.DataFrame:
     >>> print(cleaned_df)
     """
 
-    # Leer el excel principal
-    df = pd.read_excel(file_path)
+    if (search == 1):
+        # Leer el excel principal
+        df = pd.read_excel(file_path)
+    elif (search == 2):
+        # Leer excel desde clave
+        df = pd.read_csv(f'https://docs.google.com/spreadsheets/d/{file_path}/export?format=csv&usp=sharing')
 
     # Confirmar que existe la columna DI o TI
     if 'DI' not in df.columns or 'TI' not in df.columns:
@@ -54,9 +61,7 @@ def remove_duplicates(file_path: str) -> pd.DataFrame:
         df['DI'].isna() & df['TI'].isna()
     ]
 
-    # Hacer el merge de ambos
     df_final = pd.concat(df_cleaned, df_empty)
 
-    # Guardar y exportar
-    df_final.to_excel('./excel_limpio.xlsx', index=False)
+    # Exportar
     return df_final
