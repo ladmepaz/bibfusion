@@ -61,7 +61,7 @@ def remove_duplicates(file_path: str, search: int = 1) -> pd.DataFrame:
         df['DI'].isna() & df['TI'].isna()
     ]
 
-    df_final = pd.concat(df_cleaned, df_empty)
+    df_final = pd.concat([df_cleaned, df_empty])
 
     # Exportar
     return df_final
