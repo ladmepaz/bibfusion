@@ -22,7 +22,7 @@ get_references <- function(data) {
     dplyr::mutate(type_ref = if_else(str_detect(CR,
                                                 "\\., \\("), 2, # books
                                      if_else(str_detect(CR,
-                                                        "^\\([0-9]{4}\\)"), 3, # web page
+                                                        "^\\([0-9]{4}\\)"), 3,
                                              if_else(str_detect(CR,
                                                                 " \\([0-9]{4}\\), "), 4,
                                                      1)))) |> # papers
@@ -766,14 +766,8 @@ get_journals <- function(data, reference_df) {
   
   # Getting journal names
   
-  # abbrTable <- 
-  #   read_csv("https://docs.google.com/spreadsheets/d/18qGrQglhl-GxNeMw67v2NCCNFxXoG4YJ8RoBp4eSSwE/export?format=csv&gid=0")
-  # 
-  
-  abbrTable <-
+  abbrTable <- 
     read_csv("scimago_2024_combined.csv")
-
-  
   
   journals_all_abbr <- # From Scimago data
     abbrTable |>
@@ -912,19 +906,19 @@ get_authors <- function(data, reference_df) {
   ##########################################################################
   #### Extracci?n de la informaci?n de los art?culos de las referencias ####
   ##########################################################################
-  references <- data.frame(DI = character(),
-                           PU = character(),
-                           SO = character(),
-                           J9 = character(),
-                           PD = character(),
-                           PY = character(),
-                           TI = character(),
-                           AF = character(),
+  references <- data.frame(DI = character(), 
+                           PU = character(), 
+                           SO = character(), 
+                           J9 = character(), 
+                           PD = character(), 
+                           PY = character(), 
+                           TI = character(), 
+                           AF = character(), 
                            stringsAsFactors = FALSE)
-  authors <- data.frame(doi = character(),
-                        author = character(),
-                        year = character(),
-                        # month = character(),
+  authors <- data.frame(doi = character(), 
+                        author = character(), 
+                        year = character(), 
+                        # month = character(), 
                         stringsAsFactors = FALSE)
   for (i in DOI$DOI) {
     doi <- i
@@ -934,21 +928,21 @@ get_authors <- function(data, reference_df) {
       next
     } else  {
       xml_data_2 <- xmlToList(xml_data_1)
-
+      
       notfound =try(as.list(xml_data_2[["query_result"]][["body"]][["query"]][["doi"]][[".attrs"]]) == "journal_article", silent = TRUE);
       if (class(notfound) == "try-error"){
         next
       }else{
-
+        
         if (as.list(xml_data_2[["query_result"]][["body"]][["query"]][["doi"]][[".attrs"]]) == "journal_article"){
-
+          
           # PUBLISHER-NAME
-
-
+          
+          
           # if (is.null(xml_data_2[["query_result"]][["body"]][["query"]][["crm-item"]])){
-          #   PU <- as.character(NA)
+          #   PU <- as.character(NA) 
           # } else {
-          #
+          #   
           #   publisher0 <- as.list(xml_data_2[["query_result"]][["body"]][["query"]][["crm-item"]])
           #   publisher <- data.frame(publisher0)
           #   if(nrow(publisher) == 0){
@@ -957,14 +951,14 @@ get_authors <- function(data, reference_df) {
           #     PU <- as.character(publisher$text[1])
           #   }
           # }
-
-          # JOURNAL FULL TITLE
-
-
+          
+          # JOURNAL FULL TITLE 
+          
+          
           # if (is.null(xml_data_2[["query_result"]][["body"]][["query"]][["doi_record"]][["crossref"]][["journal"]][["journal_metadata"]][["full_title"]])){
-          #   SO <- as.character(NA)
+          #   SO <- as.character(NA) 
           # } else {
-          #
+          #   
           #   journal0 <- as.list(xml_data_2[["query_result"]][["body"]][["query"]][["doi_record"]][["crossref"]][["journal"]][["journal_metadata"]][["full_title"]])
           #   journal <- data.frame(journal0)
           #   if(nrow(journal) == 0){
@@ -973,14 +967,14 @@ get_authors <- function(data, reference_df) {
           #     SO <- as.character(journal[1,1])
           #   }
           # }
-
-          # JOURNAL ABBREV TITLE
-
-
+          
+          # JOURNAL ABBREV TITLE 
+          
+          
           # if (is.null(xml_data_2[["query_result"]][["body"]][["query"]][["doi_record"]][["crossref"]][["journal"]][["journal_metadata"]][["abbrev_title"]])){
-          #   J9 <- as.character(NA)
+          #   J9 <- as.character(NA) 
           # } else {
-          #
+          #   
           #   journal0 <- as.list(xml_data_2[["query_result"]][["body"]][["query"]][["doi_record"]][["crossref"]][["journal"]][["journal_metadata"]][["abbrev_title"]])
           #   journal <- data.frame(journal0)
           #   if(nrow(journal) == 0){
@@ -989,14 +983,14 @@ get_authors <- function(data, reference_df) {
           #     J9 <- as.character(journal[1,1])
           #   }
           # }
-
+          
           # MONTH
-
-
+          
+          
           # if (is.null(xml_data_2[["query_result"]][["body"]][["query"]][["doi_record"]][["crossref"]][["journal"]][["journal_issue"]][["publication_date"]][["month"]])){
           #   PD <- as.character(NA)
           # } else {
-          #
+          # 
           #   month0 <- as.list(xml_data_2[["query_result"]][["body"]][["query"]][["doi_record"]][["crossref"]][["journal"]][["journal_issue"]][["publication_date"]][["month"]])
           #   month <- data.frame(month0)
           #   if(nrow(month) == 0){
@@ -1005,33 +999,33 @@ get_authors <- function(data, reference_df) {
           #     PD <- as.character(month[1,1])
           #   }
           # }
-
+          
           # YEAR
-
-
+          
+          
           if (is.null(xml_data_2[["query_result"]][["body"]][["query"]][["doi_record"]][["crossref"]][["journal"]][["journal_issue"]][["publication_date"]][["year"]])){
-            PY <- as.character(NA)
+            PY <- as.character(NA) 
           } else {
-
+            
             Year0 <- as.list(xml_data_2[["query_result"]][["body"]][["query"]][["doi_record"]][["crossref"]][["journal"]][["journal_issue"]][["publication_date"]][["year"]])
             Year <- data.frame(Year0)
             if(nrow(Year) == 0){
               PY <- as.character(NA)
             }else{
-              PY <- as.character(Year[1,1])
+              PY <- as.character(Year[1,1]) 
             }
           }
-
+          
           # TITLE
-
-
+          
+          
           # if (is.null(xml_data_2[["query_result"]][["body"]][["query"]][["doi_record"]][["crossref"]][["journal"]][["journal_article"]][["titles"]][["title"]])){
-          #   TI <- as.character(NA)
+          #   TI <- as.character(NA) 
           # } else {
-          #
+          #   
           #   title0 <- as.list(xml_data_2[["query_result"]][["body"]][["query"]][["doi_record"]][["crossref"]][["journal"]][["journal_article"]][["titles"]][["title"]])
           #   title <- try(data.frame(title0), silent = TRUE);
-          #
+          #   
           #   if(class(title) == "try-error"){
           #     titlex <- try(ldply(title0, data.frame), silent = TRUE);
           #     if(class(titlex) == "try-error"){
@@ -1048,193 +1042,54 @@ get_authors <- function(data, reference_df) {
           #     }
           #   }
           # }
-
+          
           # CONTRIBUTORS
-
-
+          
+          
           if (is.null(xml_data_2[["query_result"]][["body"]][["query"]][["doi_record"]][["crossref"]][["journal"]][["journal_article"]][["contributors"]]))
           {
             AF <- as.character(NA)
           } else {
-
+            
             author_ref <- as.list(xml_data_2[["query_result"]][["body"]][["query"]][["doi_record"]][["crossref"]][["journal"]][["journal_article"]][["contributors"]])
-
+            
             step_1 <- try(ldply(author_ref, data.frame), silent = TRUE)
-
+            
             if (class(step_1)[1] == "try-error") {
-
+              
               author_2_ref <- author_ref[["person_name"]] |>
                 dplyr::as_tibble(.name_repair = "universal") |>
                 dplyr::filter(.attrs == "author")
-
+              
             } else {
-
+              
               author_1_ref <- ldply(author_ref, data.frame)
               author_2_ref <- author_1_ref[author_1_ref$.attrs == "author", c(2,3) ]
-
+              
             }
-
-
-            #
-
+            
+           
+            # 
+           
             authorss <- data.frame(doi= doi, author = paste0(author_2_ref$surname, ", ", author_2_ref$given_name), year = PY)
-
+            
             authors = rbind(authors, authorss)
             authorss$author <- trim(authorss$author)
             AF <- as.character(paste(authorss$author, collapse = ";   "))
           }
-
+          
           # references0 <- data.frame(DI = doi, PU = PU, SO = SO, J9 = J9, PD = PD, PY = PY)#, TI = TI)#, AF = AF)
-          # references = rbind(references, references0)
-
+          # references = rbind(references, references0) 
+          
         }else {
           next}
       }
     }
-  }
-  authors$month <- sub("^[0]+", "", authors$month) # Elimina los ceros a la izquierda
-
-  # ### 3. Getting authors from main wos
-  # 
-  # ##########################################################################
-  # #### Extraction of Article Information from References ###################
-  # ##########################################################################
-  # 
-  # # Load necessary libraries
-  # library(XML)
-  # library(plyr)
-  # library(dplyr)
-  # library(stringr)
-  # 
-  # # Assume DOI$DOI is defined and contains the list of DOIs to process
-  # # For example:
-  # # DOI <- data.frame(DOI = c("10.24425/JPPR.2022.140294", "another_doi", ...))
-  # 
-  # # Initialize data frames
-  # references <- data.frame(
-  #   DI = character(), 
-  #   PU = character(), 
-  #   SO = character(), 
-  #   J9 = character(), 
-  #   PD = character(), 
-  #   PY = character(), 
-  #   TI = character(), 
-  #   AF = character(), 
-  #   stringsAsFactors = FALSE
-  # )
-  # 
-  # authors <- data.frame(
-  #   doi = character(), 
-  #   author = character(), 
-  #   year = character(), 
-  #   stringsAsFactors = FALSE
-  # )
-  # 
-  # # Loop over each DOI
-  # for (i in DOI$DOI) {
-  #   doi <- i
-  #   url <- paste0("http://api.crossref.org/works/", doi, ".xml")
-  #   
-  #   # Try to parse the XML data
-  #   xml_data_1 <- try(xmlParse(url), silent = TRUE)
-  #   if (class(xml_data_1)[1] == "try-error") {
-  #     next
-  #   } else {
-  #     xml_data_2 <- xmlToList(xml_data_1)
-  #     
-  #     # Check if the DOI corresponds to a journal article
-  #     notfound <- try(
-  #       as.list(xml_data_2[["query_result"]][["body"]][["query"]][["doi"]][[".attrs"]]) == "journal_article",
-  #       silent = TRUE
-  #     )
-  #     if (class(notfound) == "try-error") {
-  #       next
-  #     } else {
-  #       if (as.list(xml_data_2[["query_result"]][["body"]][["query"]][["doi"]][[".attrs"]]) == "journal_article") {
-  #         
-  #         # YEAR
-  #         if (is.null(xml_data_2[["query_result"]][["body"]][["query"]][["doi_record"]][["crossref"]][["journal"]][["journal_issue"]][["publication_date"]][["year"]])) {
-  #           PY <- as.character(NA) 
-  #         } else {
-  #           Year0 <- as.list(
-  #             xml_data_2[["query_result"]][["body"]][["query"]][["doi_record"]][["crossref"]][["journal"]][["journal_issue"]][["publication_date"]][["year"]]
-  #           )
-  #           Year <- data.frame(Year0)
-  #           if (nrow(Year) == 0) {
-  #             PY <- as.character(NA)
-  #           } else {
-  #             PY <- as.character(Year[1, 1]) 
-  #           }
-  #         }
-  #         
-  #         # CONTRIBUTORS
-  #         contributors_node <- xml_data_2[["query_result"]][["body"]][["query"]][["doi_record"]][["crossref"]][["journal"]][["journal_article"]][["contributors"]]
-  #         
-  #         if (is.null(contributors_node)) {
-  #           AF <- as.character(NA)
-  #         } else {
-  #           contributors_children <- xmlChildren(contributors_node)
-  #           author_names <- c()
-  #           
-  #           for (j in seq_along(contributors_children)) {
-  #             contrib_node <- contributors_children[[j]]
-  #             contrib_type <- xmlName(contrib_node)
-  #             contrib_attrs <- xmlAttrs(contrib_node)
-  #             contrib_role <- contrib_attrs["contributor_role"]
-  #             
-  #             if (contrib_role == "author") {
-  #               if (contrib_type == "person_name") {
-  #                 surname <- xmlValue(contrib_node[["surname"]])
-  #                 given_name <- xmlValue(contrib_node[["given_name"]])
-  #                 author_name <- paste0(surname, ", ", given_name)
-  #               } else if (contrib_type == "anonymous") {
-  #                 author_name <- "Anonymous"
-  #               } else {
-  #                 next
-  #               }
-  #               author_name <- str_trim(author_name)
-  #               author_names <- c(author_names, author_name)
-  #             }
-  #           }
-  #           
-  #           if (length(author_names) == 0) {
-  #             AF <- as.character(NA)
-  #           } else {
-  #             authorss <- data.frame(
-  #               doi = doi, 
-  #               author = author_names, 
-  #               year = PY, 
-  #               stringsAsFactors = FALSE
-  #             )
-  #             authors <- rbind(authors, authorss)
-  #             AF <- paste(author_names, collapse = "; ")
-  #           }
-  #         }
-  #         
-  #         # If you wish to collect other fields like PU, SO, J9, PD, TI, you can uncomment and update the relevant sections
-  #         
-  #         # Append to references data frame if needed
-  #         # references0 <- data.frame(
-  #         #   DI = doi, 
-  #         #   PU = PU, 
-  #         #   SO = SO, 
-  #         #   J9 = J9, 
-  #         #   PD = PD, 
-  #         #   PY = PY, 
-  #         #   TI = TI, 
-  #         #   AF = AF, 
-  #         #   stringsAsFactors = FALSE
-  #         # )
-  #         # references <- rbind(references, references0)
-  #         
-  #       } else {
-  #         next
-  #       }
-  #     }
-  #   }
-  # }
-  # 
-
+  } 
+  # authors$month <- sub("^[0]+", "", authors$month) # Elimina los ceros a la izquierda 
+  
+  ### 3. Getting authors from main wos
+  
    
   ##########################################################################
   #### Separaci?n de los nombres de los autores de los art?culos de WoS ####

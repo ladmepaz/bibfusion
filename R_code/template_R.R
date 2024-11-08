@@ -15,32 +15,32 @@ library(XML)
 library(plyr)
 
 wos_scopus <-
-  tosr::tosr_load("fungi.bib",
-                  "fungi.txt"
-                  # "fungi_2.txt"
-                  # "fungi_1_3.txt",
-                  # "fungi_1_4.txt"
+  tosr::tosr_load("insuline.bib",
+                  "insuline.txt"
+                  # "insuline_2.txt"
+                  # "insuline_1_3.txt",
+                  # "insuline_1_4.txt"
                   )
 
 tree_of_science <-
-  tosr::tosR("fungi.bib",
-             "fungi.txt"
-             # "fungi_2.txt"
-             # "fungi_1_3.txt",
-             # "fungi_1_4.txt"
+  tosr::tosR("insuline.bib",
+             "insuline.txt"
+             # "insuline_2.txt"
+             # "insuline_1_3.txt",
+             # "insuline_1_4.txt"
              )
 
 wos <-
-  bibliometrix::convert2df(c("fungi.txt"
-                             # "fungi_2.txt"
-                             # "fungi_1_3.txt",
-                             # "fungi_1_4.txt"
+  bibliometrix::convert2df(c("insuline.txt"
+                             # "insuline_2.txt"
+                             # "insuline_1_3.txt",
+                             # "insuline_1_4.txt"
                              )) |>  # create dataframe from wos file
   bibliometrix::metaTagExtraction(Field = "AU_CO" ) # Adding Country author's affiliation
 
 scopus <-
-  bibliometrix::convert2df(c("fungi.bib"
-                             # "fungi_1b.bib"
+  bibliometrix::convert2df(c("insuline.bib"
+                             # "insuline_1b.bib"
                              ), # Create dataframe from scopus file
                            dbsource = "scopus",
                            format = "bibtex") |> 
@@ -50,10 +50,10 @@ scopus <-
 CR_links <-
   get_references(wos_scopus$df)
 
-write_csv(CR_links, "CR_links_fungi_1.csv")
+write_csv(CR_links, "CR_links_insuline_1.csv")
 # 
 # CR_links <-
-#   read_csv("CR_links_fungi_1.csv")
+#   read_csv("CR_links_insuline_1.csv")
 
 # country_df <-
 #   get_country()
@@ -61,18 +61,18 @@ write_csv(CR_links, "CR_links_fungi_1.csv")
 SO_links <-
   get_journals(wos_scopus$df, CR_links)
 
-write_csv(SO_links, "SO_links_fungi_1.csv")
+write_csv(SO_links, "SO_links_insuline_1.csv")
 # 
 # SO_links <-
-#   read_csv("SO_links_fungi_1.csv")
+#   read_csv("SO_links_insuline_1.csv")
 
 AU_links <-
   get_authors(wos_scopus$df, CR_links)
 
-write_csv(AU_links, "AU_links_fungi_1.csv")
+write_csv(AU_links, "AU_links_insuline_1.csv")
 # 
 # AU_links <-
-#   read_csv("AU_links_fungi_1.csv")
+#   read_csv("AU_links_insuline_1.csv")
 
 #### Figure 1 ####
 
@@ -223,10 +223,11 @@ wos_scopus_countries_journals <-
 #   mutate(PY = 2020)
 
 scimago <-
-  read_csv("https://docs.google.com/spreadsheets/d/1K_3QqjcD8Hab2ehXwE_1cm-6yhSoet13Q7qsULlnN1Y/export?format=csv&gid=1875866918") |>
+  #read_csv("https://docs.google.com/spreadsheets/d/1K_3QqjcD8Hab2ehXwE_1cm-6yhSoet13Q7qsULlnN1Y/export?format=csv&gid=1875866918") |>
+  read_csv("scimago_2024_combined.csv") |>
   # select(-1) |>
-  select(PY = ano,
-         SO = revista,
+  select(PY = PY,
+         SO = journal,
          quartile = categoria) |>
   mutate(SO = str_to_upper(SO)) |>
   unique()
@@ -1053,5 +1054,5 @@ list_of_files <- list(wos_scopus = wos_scopus$df,
 )
 
 
-write.xlsx(list_of_files, file = "all_data_fungi_1.xlsx")
+write.xlsx(list_of_files, file = "all_data_insuline_1.xlsx")
 
