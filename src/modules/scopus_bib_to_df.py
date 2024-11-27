@@ -60,7 +60,10 @@ def scopus_bib_to_df(file_path):
             'volume': 'VL',
             'year': 'PY',
             'funding_text_1': 'FX',
-            'ID': 'USERS_ID',
+            'id': 'USERS_ID',
+            # Map 'au_un' and 'au1_un' if needed
+            'au_un': 'AU_UN',
+            'au1_un': 'AU1_UN',
             # Add any additional mappings as needed
         }
 
@@ -70,7 +73,7 @@ def scopus_bib_to_df(file_path):
             'AR', 'CHEMICAL_CAS', 'CODEN', 'RP', 'DT', 'DI', 'BE', 'FU',
             'BN', 'SN', 'SO', 'LA', 'TC', 'PN', 'PAGE_COUNT', 'PP',
             'PU', 'PM', 'DB', 'SP', 'TI', 'UR', 'VL', 'PY',
-            'FX', 'AU_UN', 'AU1_UN', 
+            'FX', 'AU_UN', 'AU1_UN',
             'SR_FULL', 'SR',
             # Additional columns can be added here
         ]
@@ -114,7 +117,6 @@ def scopus_bib_to_df(file_path):
 
         for entry in entries:
             entry_data = {}
-            first_author = ''
             try:
                 for key in entry:
                     value = entry.get(key, '')
@@ -152,7 +154,7 @@ def scopus_bib_to_df(file_path):
                             processed_authors.append(processed_author)
                         entry_data[key_lower] = ';'.join(processed_authors)
                         # Extract the first author
-                        first_author = processed_authors[0] if processed_authors else ''
+                        # Stored as the first in the 'AU' field after mapping
 
                     # Process 'note' field to extract citation count
                     if key_lower == 'note':
@@ -175,26 +177,10 @@ def scopus_bib_to_df(file_path):
                         # Get the first university
                         entry_data['au1_un'] = universities[0] if universities else ''
 
-                # Create 'J9' by removing periods from 'abbrev_source_title' ('JI')
-                if 'abbrev_source_title' in entry:
-                    # Ensure 'JI' is uppercase as per earlier processing
-                    abbrev_title = entry_data.get('abbrev_source_title', '').upper()
-                    entry_data['j9'] = abbrev_title.replace('.', '')
-                else:
-                    entry_data['j9'] = ''
-
-                # Construct 'SR_FULL' and 'SR' fields
-                if all(k in entry_data for k in ['author', 'year', 'journal']):
-                    entry_data['sr_full'] = f"{first_author}, {entry_data['year']}, {entry_data['journal']}"
-                    entry_data['sr'] = f"{first_author}, {entry_data['year']}, {entry_data.get('j9', '')}"
-                else:
-                    entry_data['sr_full'] = ''
-                    entry_data['sr'] = ''
-
                 entries_data.append(entry_data)
 
             except Exception as e:
-                entry_id = entry.get('ID', 'Unknown ID')
+                entry_id = entry.get('id', 'Unknown ID')
                 print(f"Warning: Failed to process entry ID '{entry_id}': {e}")
                 continue  # Skip to the next entry
 
@@ -211,6 +197,33 @@ def scopus_bib_to_df(file_path):
 
         # Reorder the DataFrame columns
         df = df[column_order]
+
+        # Create 'J9' by removing periods from 'JI'
+        df['J9'] = df['JI'].str.replace('.', '', regex=False).fillna('')
+
+        # Construct 'SR_FULL' and 'SR' columns using the renamed DataFrame columns
+        def construct_sr_full(row):
+            au = row['AU']
+            py = row['PY']
+            so = row['SO']
+            if au and py and so:
+                first_author = au.split(';')[0]
+                return f"{first_author}, {py}, {so}"
+            else:
+                return ''
+
+        def construct_sr(row):
+            au = row['AU']
+            py = row['PY']
+            j9 = row['J9']
+            if au and py and j9:
+                first_author = au.split(';')[0]
+                return f"{first_author}, {py}, {j9}"
+            else:
+                return ''
+
+        df['SR_FULL'] = df.apply(construct_sr_full, axis=1)
+        df['SR'] = df.apply(construct_sr, axis=1)
 
         return df
 
