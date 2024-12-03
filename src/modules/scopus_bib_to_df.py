@@ -1,84 +1,23 @@
-import pandas as pd
-import bibtexparser
-import re
-import unicodedata
-
 def scopus_bib_to_df(file_path):
     """
-    Converts a Scopus BibTeX file into a structured pandas DataFrame.
-
-    This function reads a BibTeX file, sanitizes field names to handle non-standard characters
-    or spaces (e.g., 'funding_text 1'), and organizes the entries into a DataFrame.
-    It processes the file by converting all data to uppercase, handling multiple entries
-    for fields like 'funding_details', and extracting relevant information such as the affiliation universities.
-    It also changes the author format from "Last, F." to "LAST F" and constructs new columns
-    such as 'SR_FULL' and 'SR' that concatenate key bibliographic details.
+    Reads a Scopus BibTeX file and converts it into a DataFrame.
 
     Parameters:
     ----------
     file_path : str
-        Path to the BibTeX file to be read.
+        The path to the BibTeX file.
 
     Returns:
     -------
     pd.DataFrame
-        A pandas DataFrame containing the entries from the BibTeX file, organized into columns defined by `column_mapping` and `column_order`.
-        If an error occurs during reading or parsing, it returns None.
+        DataFrame containing the processed BibTeX entries.
     """
+    import pandas as pd
+    import re
+    import unicodedata
+    import bibtexparser
+
     try:
-        # Define the mapping from BibTeX fields to desired DataFrame columns
-        column_mapping = {
-            'author': 'AU',
-            'author_keywords': 'DE',
-            'keywords': 'ID',
-            'affiliation': 'C1',
-            'references': 'CR',
-            'abbrev_source_title': 'JI',
-            'abstract': 'AB',
-            'art_number': 'AR',
-            'chemicals_cas': 'CHEMICAL_CAS',
-            'coden': 'CODEN',
-            'correspondence_address1': 'RP',
-            'document_type': 'DT',
-            'doi': 'DI',
-            'editor': 'BE',
-            'funding_details': 'FU',
-            'isbn': 'BN',
-            'issn': 'SN',
-            'journal': 'SO',
-            'language': 'LA',
-            'note': 'TC',
-            'number': 'PN',
-            'page_count': 'PAGE_COUNT',
-            'pages': 'PP',
-            'publisher': 'PU',
-            'pubmed_id': 'PM',
-            'source': 'DB',
-            'sponsors': 'SP',
-            'title': 'TI',
-            'url': 'UR',
-            'volume': 'VL',
-            'year': 'PY',
-            'funding_text_1': 'FX',
-            'id': 'USERS_ID',
-            # Map 'au_un' and 'au1_un' if needed
-            'au_un': 'AU_UN',
-            'au1_un': 'AU1_UN',
-            # Add any additional mappings as needed
-        }
-
-        # Define the desired column order
-        column_order = [
-            'USERS_ID', 'AU', 'DE', 'ID', 'C1', 'CR', 'JI', 'J9', 'AB',
-            'AR', 'CHEMICAL_CAS', 'CODEN', 'RP', 'DT', 'DI', 'BE', 'FU',
-            'BN', 'SN', 'SO', 'LA', 'TC', 'PN', 'PAGE_COUNT', 'PP',
-            'PU', 'PM', 'DB', 'SP', 'TI', 'UR', 'VL', 'PY',
-            'FX', 'AU_UN', 'AU1_UN',
-            'SR_FULL', 'SR',
-            # Additional columns can be added here
-        ]
-
-        # Read the BibTeX file
         with open(file_path, 'r', encoding='utf-8') as bibfile:
             bibtex_str = bibfile.read()
 
@@ -121,6 +60,11 @@ def scopus_bib_to_df(file_path):
                 for key in entry:
                     value = entry.get(key, '')
                     key_lower = key.lower()
+                    # Ensure value is a string
+                    if value is None:
+                        value = ''
+                    elif not isinstance(value, str):
+                        value = str(value)
                     # Keep the 'url' field as is
                     if key_lower == 'url':
                         entry_data[key_lower] = value
@@ -130,31 +74,34 @@ def scopus_bib_to_df(file_path):
                     # Process 'author' field
                     if key_lower == 'author':
                         authors_raw = value.replace('\n', ' ')
-                        # Split authors by ' and '
-                        authors_list = re.split(r'\s+and\s+', authors_raw, flags=re.IGNORECASE)
-                        processed_authors = []
-                        for author in authors_list:
-                            author = author.strip()
-                            if ',' in author:
-                                # Format: 'Last, F.'
-                                last, first = [part.strip() for part in author.split(',', 1)]
-                                # Remove periods from initials
-                                first_initial = ''.join([name_part[0] for name_part in first.replace('.', '').split() if name_part])
-                            else:
-                                # Format: 'First Last' or single name
-                                parts = author.split()
-                                if len(parts) >= 2:
-                                    first_initial = parts[0][0]
-                                    last = ' '.join(parts[1:])
+                        # Ensure authors_raw is a non-empty string
+                        if isinstance(authors_raw, str) and authors_raw.strip():
+                            # Split authors by ' and '
+                            authors_list = re.split(r'\s+and\s+', authors_raw, flags=re.IGNORECASE)
+                            processed_authors = []
+                            for author in authors_list:
+                                author = author.strip()
+                                if ',' in author:
+                                    # Format: 'Last, F.'
+                                    last, first = [part.strip() for part in author.split(',', 1)]
+                                    # Remove periods from initials
+                                    first_initial = ''.join([name_part[0] for name_part in first.replace('.', '').split() if name_part])
                                 else:
-                                    # Single name, take as last name
-                                    first_initial = ''
-                                    last = parts[0]
-                            processed_author = f"{last.upper()} {first_initial.upper()}".strip()
-                            processed_authors.append(processed_author)
-                        entry_data[key_lower] = ';'.join(processed_authors)
-                        # Extract the first author
-                        # Stored as the first in the 'AU' field after mapping
+                                    # Format: 'First Last' or single name
+                                    parts = author.split()
+                                    if len(parts) >= 2:
+                                        first_initial = parts[0][0]
+                                        last = ' '.join(parts[1:])
+                                    else:
+                                        # Single name, take as last name
+                                        first_initial = ''
+                                        last = parts[0]
+                                processed_author = f"{last.upper()} {first_initial.upper()}".strip()
+                                processed_authors.append(processed_author)
+                            entry_data[key_lower] = ';'.join(processed_authors)
+                        else:
+                            # Handle non-string or empty 'authors_raw'
+                            entry_data[key_lower] = ''
 
                     # Process 'note' field to extract citation count
                     if key_lower == 'note':
@@ -187,10 +134,53 @@ def scopus_bib_to_df(file_path):
         # Create the DataFrame
         df = pd.DataFrame(entries_data)
 
+        # Define the mapping from BibTeX fields to desired DataFrame columns
+        column_mapping = {
+            'author': 'AU',
+            'author_keywords': 'DE',
+            'keywords': 'ID',
+            'affiliation': 'C1',
+            'references': 'CR',
+            'abbrev_source_title': 'JI',
+            'abstract': 'AB',
+            'art_number': 'AR',
+            'chemicals_cas': 'chemicals_cas',
+            'coden': 'coden',
+            'correspondence_address1': 'RP',
+            'document_type': 'DT',
+            'doi': 'DI',
+            'editor': 'BE',
+            'funding_details': 'FU',
+            'isbn': 'BN',
+            'issn': 'SN',
+            'journal': 'SO',
+            'language': 'LA',
+            'note': 'TC',
+            'number': 'PN',
+            'page_count': 'page_count',
+            'pages': 'PP',
+            'publisher': 'PU',
+            'pubmed_id': 'PM',
+            'source': 'DB',
+            'sponsors': 'sponsors',
+            'title': 'TI',
+            'url': 'url',
+            'volume': 'VL',
+            'year': 'PY',
+            'funding_text_1': 'FX',
+            # Additional mappings can be added here
+        }
+
         # Rename columns according to the mapping
         df.rename(columns=column_mapping, inplace=True)
 
         # Ensure all desired columns are present
+        column_order = [
+            'AU', 'DE', 'ID', 'C1', 'CR', 'JI', 'AB', 'AR', 'chemicals_cas', 'coden',
+            'RP', 'DT', 'DI', 'BE', 'FU', 'BN', 'SN', 'SO', 'LA', 'TC', 'PN',
+            'page_count', 'PP', 'PU', 'PM', 'DB', 'sponsors', 'TI', 'url', 'VL',
+            'PY', 'FX', 'AU_UN', 'AU1_UN', 'J9', 'SR_FULL', 'SR'
+        ]
         for col in column_order:
             if col not in df.columns:
                 df[col] = ''
@@ -206,8 +196,11 @@ def scopus_bib_to_df(file_path):
             au = row['AU']
             py = row['PY']
             so = row['SO']
-            if au and py and so:
-                first_author = au.split(';')[0]
+            if pd.notnull(au) and pd.notnull(py) and pd.notnull(so):
+                if isinstance(au, str) and au:
+                    first_author = au.split(';')[0]
+                else:
+                    first_author = ''
                 return f"{first_author}, {py}, {so}"
             else:
                 return ''
@@ -216,8 +209,11 @@ def scopus_bib_to_df(file_path):
             au = row['AU']
             py = row['PY']
             j9 = row['J9']
-            if au and py and j9:
-                first_author = au.split(';')[0]
+            if pd.notnull(au) and pd.notnull(py) and pd.notnull(j9):
+                if isinstance(au, str) and au:
+                    first_author = au.split(';')[0]
+                else:
+                    first_author = ''
                 return f"{first_author}, {py}, {j9}"
             else:
                 return ''
