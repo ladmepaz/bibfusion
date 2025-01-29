@@ -203,7 +203,25 @@ def wos_txt_to_df(file_path):
             if col not in df.columns:
                 df[col] = ''
 
+        # Rename columns
+        rename_columns = { 
+            'AU': 'Authors', 'AF': 'Author Full Names', 'CR': 'Cited References', 'AB': 'Abstract', 'AR': 'Article Number',
+            'BP': 'Page Start', 'C1': 'Affiliation', 'C3': 'Affiliation 2', 'CL': 'Conference Location', 'CT': 'Conference Title',
+            'CY': 'Conference Year', 'DA': 'Date', 'DE': 'Author Keywords', 'DI': 'DOI', 'DT': 'Document Type', 'EA': 'Early Access Date',
+            'EF': '', 'EI': 'Online ISSN', 'EM': 'E-mail Address', 'EP': 'Page End', 'ER': '', 'FU': 'Funding Details', 'FX': 'Funding Text',
+            'GA': 'Document Delivery Number', 'HC': 'Highly Cited', 'HO': 'Open Access', 'HP': 'Epub Date', 'ID': 'Keywords Plus',
+            'IS': 'Issue', 'J9': 'Source Title', 'JI': 'Journal Abbreviation', 'LA': 'Language of Original Document', 'MA': 'Document Delivery Number',
+            'NR': 'Cited Reference Count', 'OA': 'Open Access', 'OI': 'ORCID', 'PA': 'Publisher Address', 'PD': 'Publication Date',
+            'PG': 'Page Count', 'PI': 'City Publisher', 'PM': 'PubMed ID', 'PN': 'Part Number', 'PT': 'Publication Type', 'PU': 'Publisher',
+            'PY': 'Publication Year', 'RI': 'Researcher ID Number', 'RP': 'Reprint Address', 'SC': 'Subject Category', 'SI': 'Special Issue',
+            'SN': 'ISSN', 'SO': 'Journal', 'SP': 'Conference Sponsor', 'SU': 'Conference Host', 'TC': 'Times Cited', 'TI': 'Title',
+            'U1': 'Usage Count (Last 180 Days)', 'U2': 'Usage Count (Since 2013)', 'UT': 'Accession Number', 'VL': 'Volume', 'WC': 'Web of Science Categories',
+            'WE': 'Web of Science Entry', 'Z9': 'Total Times Cited', 'DB': 'Database', 'SR': 'Source'
+        }
+        
+
         df = df[desired_columns]
+        df.rename(columns=rename_columns, inplace=True)
 
         return df
 
