@@ -75,6 +75,10 @@ def scopus_csv_to_df(file_path):
             else:
                 print(f"Warning: Column '{col}' not found in DataFrame.")
 
+        rename_columns = {
+            'authors':'author', 'art_no':'article_number', 'language_of_original_document': 'language',
+            'open_access':'open_access_indicator'
+        }
         return df
 
     except FileNotFoundError:
