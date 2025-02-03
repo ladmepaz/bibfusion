@@ -214,9 +214,9 @@ def wos_txt_to_df(file_path):
             'NR': 'cited_reference_count', 'OA': 'open_access_indicator', 'OI': 'orcid', 'PA': 'publisher_address', 'PD': 'publication_date',
             'PG': 'page_count', 'PI': 'city_publisher', 'PM': 'pubmed_id', 'PN': 'part_number', 'PT': 'publication_type', 'PU': 'publisher',
             'PY': 'year', 'RI': 'researcher_id_number', 'RP': 'reprint_address', 'SC': 'subject_category', 'SI': 'special_issue',
-            'SN': 'issn', 'SO': 'journal', 'SP': 'conference_sponsor', 'SU': 'conference_host', 'TC': 'times_cited', 'TI': 'title',
+            'SN': 'issn', 'SO': 'journal', 'SP': 'conference_sponsor', 'SU': 'conference_host', 'TC': 'cited_by', 'TI': 'title',
             'U1': 'usage_count_last_180_days', 'U2': 'usage_count_since_2013', 'UT': 'accession_number', 'VL': 'volume', 'WC': 'web_of_science_categories',
-            'WE': 'web_of_science_entry', 'Z9': 'total_times_cited', 'DB': 'database', 'SR': 'source'
+            'WE': 'web_of_science_entry', 'Z9': 'total_times_cited', 'DB': 'source', 'SR': 'source_title'
         }
         
 
