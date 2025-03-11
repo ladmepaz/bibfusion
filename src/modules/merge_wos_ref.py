@@ -1,3 +1,5 @@
+import logging
+import pandas as pd
 def merge_wos_ref(wos_df: pd.DataFrame, wos_ref_enriched: pd.DataFrame) -> pd.DataFrame:
     """
     Modifies wos_df and wos_ref_enriched dataframes by:
@@ -20,8 +22,7 @@ def merge_wos_ref(wos_df: pd.DataFrame, wos_ref_enriched: pd.DataFrame) -> pd.Da
     pd.DataFrame
         The combined dataframe with 'ismainarticle' column and all modifications applied.
     """
-    import logging
-    import pandas as pd
+    
 
     # Configure logging if not already configured
     logging.basicConfig(

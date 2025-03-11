@@ -1,3 +1,5 @@
+import pandas as pd
+import re
 def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
     """
     Extracts and aligns author, affiliation, corresponding author, ORCID, ResearcherID, and email information from the wos_df_3 dataframe
@@ -21,8 +23,6 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
         A dataframe with one row per author per article, containing 'SR', 'AuthorOrder', 'AuthorName',
         'AuthorFullName', 'Affiliation', 'CorrespondingAuthor', 'Orcid', 'ResearcherID', and 'Email' columns.
     """
-    import pandas as pd
-    import re
 
     # Step 0: Define the list of invalid 'SR' values to remove
     invalid_sr_values = [
