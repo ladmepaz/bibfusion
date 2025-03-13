@@ -25,7 +25,7 @@ from modules.scopus_csv_to_df import scopus_csv_to_df
 from modules.scopus_df import bib_to_df
 from modules.wos_df import wos_df
 from modules.wos_txt_to_df import wos_txt_to_df
-from modules.duplicates import remove_duplicates
+from modules.duplicates import remove_duplicates_df
 
 # ============================
 # MODULES FOR CITATION NETWORK ANALYSIS
@@ -57,6 +57,7 @@ __all__ = [
     "scopus_bib_to_df",
     "bib_to_df",
     "wos_df",
+    "remove_duplicates_df",
     
     # Citation networks
     "get_citation_network",
