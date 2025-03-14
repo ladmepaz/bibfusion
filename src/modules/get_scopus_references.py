@@ -110,20 +110,20 @@ def extract_year(text):
     Returns:
     -------
     tuple
-        - py: The publication year as a string.
+        - year: The publication year as a string.
         - text_before_year: Text before the year.
         - text_after_year: Text after the year.
     """
     year_match = re.search(r'\((\d{4})\)', text)
     if year_match:
-        py = year_match.group(1)
+        year = year_match.group(1)
         text_before_year = text[:year_match.start()].strip(' ,.')
         text_after_year = text[year_match.end():].strip(' ,.')
     else:
-        py = ''
+        year = ''
         text_before_year = text.strip(' ,.')
         text_after_year = ''
-    return py, text_before_year, text_after_year
+    return year, text_before_year, text_after_year
 
 def extract_title_and_journal(text_before_year, text_after_year):
     """
@@ -225,27 +225,27 @@ def get_scopus_references(scopus_df):
     Parameters:
     ----------
     scopus_df : pd.DataFrame
-        A DataFrame containing at least the columns 'SR' and 'CR'.
+        A DataFrame containing at least the columns 'SR' and 'references'.
 
     Returns:
     -------
     pd.DataFrame
-        A DataFrame with columns 'SR', 'SR_ref', 'TI', 'AU', 'SO', 'PY', 'DI', 'CR_ref'.
+        A DataFrame with columns 'SR', 'SR_ref', 'title', 'author', 'journal', 'year', 'doi', 'CR_ref'.
     """
-    scopus_df = scopus_df[['SR', 'CR']].copy()
+    scopus_df = scopus_df[['SR', 'references']].copy()
     extracted_refs = []
 
     for idx, row in scopus_df.iterrows():
         sr_value = row['SR']
-        cr_value = row['CR']
+        cr_value = row['references']
         references = re.split(r';\s*', str(cr_value))
 
         for ref in references:
             original_ref = ref.strip()
             if original_ref:
                 # Extract authors and remaining text
-                au, remaining_text = extract_authors(original_ref)
-                if not au:
+                author, remaining_text = extract_authors(original_ref)
+                if not author:
                     continue  # Skip entries without authors
 
                 # Extract DOI
@@ -255,7 +255,7 @@ def get_scopus_references(scopus_df):
                 remaining_text = clean_remaining_text(remaining_text)
 
                 # Extract publication year
-                py, text_before_year, text_after_year = extract_year(remaining_text)
+                year, text_before_year, text_after_year = extract_year(remaining_text)
 
                 # Extract title and journal
                 title, journal = extract_title_and_journal(text_before_year, text_after_year)
@@ -266,26 +266,26 @@ def get_scopus_references(scopus_df):
                 extracted_refs.append({
                     'SR': sr_value,
                     'CR_ref': original_ref,
-                    'AU': au,
-                    'TI': title,
-                    'SO': journal if journal else '-',
-                    'PY': py,
-                    'DI': doi
+                    'author': author,
+                    'title': title,
+                    'journal': journal if journal else '-',
+                    'year': year,
+                    'doi': doi
                 })
 
     references_df = pd.DataFrame(extracted_refs)
 
-    # Remove dots from 'SO' column
-    references_df['SO'] = references_df['SO'].str.replace('.', '', regex=False)
+    # Remove dots from 'journal' column
+    references_df['journal'] = references_df['journal'].str.replace('.', '', regex=False)
 
-    # Create 'SR_ref' column as 'First_Author, PY, SO'
+    # Create 'SR_ref' column as 'First_Author, year, journal'
     references_df['SR_ref'] = references_df.apply(
-        lambda row: f"{row['AU'].split(';')[0]}, {row['PY']}, {row['SO']}",
+        lambda row: f"{row['author'].split(';')[0]}, {row['year']}, {row['journal']}",
         axis=1
     )
 
     # Rearrange columns to the desired order
-    desired_order = ['SR', 'SR_ref', 'TI', 'AU', 'SO', 'PY', 'DI', 'CR_ref']
+    desired_order = ['SR', 'SR_ref', 'title', 'author', 'journal', 'year', 'doi', 'CR_ref']
     references_df = references_df[desired_order]
 
     return references_df
