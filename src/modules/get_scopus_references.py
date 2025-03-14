@@ -4,21 +4,21 @@ import urllib.parse
 
 def extract_authors(cr_ref):
     """
-    Extracts authors from the reference string and returns the remaining text.
+    Extracts author from the reference string and returns the remaining text.
 
     Parameters:
     ----------
     cr_ref : str
-        A reference string from which to extract authors.
+        A reference string from which to extract author.
 
     Returns:
     -------
     tuple
-        - authors_str: A semicolon-separated string of authors in the format 'LASTNAME INITIALS'.
-        - remaining_text: The remaining text of cr_ref after the authors are extracted.
+        - authors_str: A semicolon-separated string of author in the format 'LASTNAME INITIALS'.
+        - remaining_text: The remaining text of cr_ref after the author are extracted.
     """
     tokens = cr_ref.split(', ')
-    authors = []
+    author_list = []  # Debe mantenerse como lista hasta el return
     i = 0
     while i < len(tokens):
         last_name = tokens[i]
@@ -29,15 +29,15 @@ def extract_authors(cr_ref):
             if re.match(last_name_pattern, last_name) and re.match(initials_pattern, initials):
                 # Clean initials by removing periods and spaces
                 initials_clean = re.sub(r'[.\s]', '', initials)
-                author = f"{last_name} {initials_clean}"
-                authors.append(author)
+                author = f"{last_name} {initials_clean}"  # Crear un string para el autor actual
+                author_list.append(author)  # Añadir el autor a la lista
                 i += 2
             else:
                 break
         else:
             break
     remaining_text = ', '.join(tokens[i:])
-    return ';'.join(authors), remaining_text
+    return ';'.join(author_list), remaining_text
 
 def extract_doi(text):
     """
@@ -217,9 +217,43 @@ def clean_journal(journal):
     journal = journal.strip(' ,.')
     return journal
 
+def create_SR_column(scopus_df, author_col, year_col, journal_col):
+    """
+    Creates a new column 'SR' in the dataframe with format 'First_Author, year, journal'.
+    
+    Parameters:
+    ----------
+    df : pandas.DataFrame
+        The dataframe to modify.
+    author_col : str
+        Name of the column containing authors (separated by ';').
+    year_col : str
+        Name of the column containing publication year.
+    journal_col : str
+        Name of the column containing journal name.
+        
+    Returns:
+    -------
+    pandas.DataFrame
+        The dataframe with the new 'SR' column.
+    """
+    # Crear una función auxiliar que procesará cada fila
+    def create_SR_ref(row):
+        author = row[author_col]
+        year = row[year_col]
+        journal = row[journal_col]
+        # Extraer el primer autor
+        first_author = author.split(';')[0] if isinstance(author, str) and ';' in author else author
+        return f"{first_author}, {year}, {journal}"
+    
+    # Aplicar la función a cada fila del DataFrame
+    scopus_df['SR'] = scopus_df.apply(create_SR_ref, axis=1)
+    
+    return scopus_df
+
 def get_scopus_references(scopus_df):
     """
-    Processes the Scopus DataFrame to extract authors, titles, years, journals, and DOIs,
+    Processes the Scopus DataFrame to extract author, titles, years, journals, and DOIs,
     removes dots from journal names, creates SR_ref, and rearranges columns.
 
     Parameters:
@@ -232,6 +266,8 @@ def get_scopus_references(scopus_df):
     pd.DataFrame
         A DataFrame with columns 'SR', 'SR_ref', 'title', 'author', 'journal', 'year', 'doi', 'CR_ref'.
     """
+    print(scopus_df.columns)
+    scopus_df = create_SR_column(scopus_df, author_col='author', year_col='year', journal_col='journal')
     scopus_df = scopus_df[['SR', 'references']].copy()
     extracted_refs = []
 
@@ -243,10 +279,10 @@ def get_scopus_references(scopus_df):
         for ref in references:
             original_ref = ref.strip()
             if original_ref:
-                # Extract authors and remaining text
+                # Extract author and remaining text
                 author, remaining_text = extract_authors(original_ref)
                 if not author:
-                    continue  # Skip entries without authors
+                    continue  # Skip entries without author
 
                 # Extract DOI
                 doi, remaining_text = extract_doi(remaining_text)
