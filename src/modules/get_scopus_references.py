@@ -266,7 +266,7 @@ def get_scopus_references(scopus_df):
     pd.DataFrame
         A DataFrame with columns 'SR', 'SR_ref', 'title', 'author', 'journal', 'year', 'doi', 'CR_ref'.
     """
-    print(scopus_df.columns)
+    
     scopus_df = create_SR_column(scopus_df, author_col='author', year_col='year', journal_col='journal')
     scopus_df = scopus_df[['SR', 'references']].copy()
     extracted_refs = []
