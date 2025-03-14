@@ -205,7 +205,7 @@ def wos_txt_to_df(file_path):
 
         # Rename columns
         rename_columns = {
-            'AU': 'authors', 'AF': 'author_full_names', 'CR': 'references', 'AB': 'abstract', 'AR': 'article_number',
+            'AU': 'author', 'AF': 'author_full_names', 'CR': 'references', 'AB': 'abstract', 'AR': 'article_number',
             'BP': 'page_start', 'C1': 'affiliations', 'C3': 'affiliation_2', 'CL': 'conference_location', 'CT': 'conference_title',
             'CY': 'conference_year', 'DA': 'date', 'DE': 'author_keywords', 'DI': 'doi', 'DT': 'document_type', 'EA': 'early_access_date',
             'EI': 'eissn', 'EM': 'email_address', 'EP': 'page_end', 'FU': 'funding_agency', 'FX': 'funding_details',
