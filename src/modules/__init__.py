@@ -15,7 +15,7 @@ from modules.get_wos_author_data import *
 from modules.scopus_ref import scopus_refs
 from modules.merge_scopus_ref import merge_scopus_ref
 from modules.merge_wos_ref import merge_wos_ref
-from modules.enrich_wos_ref import *
+from modules.enrich_wos_ref import enrich_wos_ref, update_wos_ref_with_crossref
 
 # ============================
 # MODULES FOR DATA CONVERSION AND CLEANING

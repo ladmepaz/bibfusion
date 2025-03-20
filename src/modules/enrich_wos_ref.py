@@ -2,6 +2,7 @@ import pandas as pd
 import requests
 import re
 import logging
+from modules.get_crossref_data_updated import get_crossref_data_updated
 
 # Configure logging to capture information and errors
 logging.basicConfig(
