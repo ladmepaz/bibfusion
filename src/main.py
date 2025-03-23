@@ -21,11 +21,14 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         wos_df = remove_duplicates_df(wos_df)
         print("2. Duplicados removidos")
         # Get references
-        print("3. Referencias de WoS hecha")
         wos_references = get_wos_references(wos_df)
+        print("3. Referencias de WoS hecha")
+        # Enrich references with Crossref
+        print("4. Referencias de WoS enriquecidas con Crossref")
         enrich_wos_ref = update_wos_ref_with_crossref(wos_references,'doi')
+        
         enrich_wos_ref.to_csv('tests/files/enrich_wos_ref.csv', index=False)
-        # print(enrich_wos_ref_result)
+        
         
         
     else:
@@ -62,7 +65,7 @@ def preprocesing_df(path_wos=None,path_scopus=None):
     return None
 
 
-preprocesing_df('tests/files/wos.txt','tests/files/scopus.csv')
+preprocesing_df('tests/files/wos_5results.txt','tests/files/scopus.csv')
 
 
 
