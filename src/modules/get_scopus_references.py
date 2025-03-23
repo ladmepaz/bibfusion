@@ -268,10 +268,10 @@ def get_scopus_references(scopus_df):
     """
     
     scopus_df = create_SR_column(scopus_df, author_col='author', year_col='year', journal_col='journal')
-    scopus_df = scopus_df[['SR', 'references']].copy()
+    scopus_df_copy = scopus_df[['SR', 'references']].copy()
     extracted_refs = []
 
-    for idx, row in scopus_df.iterrows():
+    for idx, row in scopus_df_copy.iterrows():
         sr_value = row['SR']
         cr_value = row['references']
         references = re.split(r';\s*', str(cr_value))
@@ -324,4 +324,4 @@ def get_scopus_references(scopus_df):
     desired_order = ['SR', 'SR_ref', 'title', 'author', 'journal', 'year', 'doi', 'CR_ref']
     references_df = references_df[desired_order]
 
-    return references_df
+    return references_df, scopus_df
