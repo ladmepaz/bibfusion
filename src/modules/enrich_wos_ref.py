@@ -125,7 +125,7 @@ def enrich_wos_ref(doi: str) -> dict:
     except Exception as e:
         return {"error": f"An unexpected error occurred: {e}"}
 
-def update_wos_ref_with_crossref(wos_ref: pd.DataFrame, doi_column: str = 'DI') -> pd.DataFrame:
+def update_wos_ref_with_crossref(wos_ref: pd.DataFrame, doi_column: str = 'doi') -> pd.DataFrame:
     """
     Updates the wos_ref dataframe with additional information from CrossRef based on unique DOIs.
 
@@ -181,7 +181,7 @@ def update_wos_ref_with_crossref(wos_ref: pd.DataFrame, doi_column: str = 'DI') 
         # Ensure 'DI' is the key for merging
         wos_ref_updated = wos_ref.merge(
             crossref_df,
-            on='DI',
+            on='doi',
             how='left',
             suffixes=('', '_crossref')
         )
@@ -210,8 +210,8 @@ def update_wos_ref_with_crossref(wos_ref: pd.DataFrame, doi_column: str = 'DI') 
     }
     
     # Create a new column 'J9_crossref' by mapping 'SO' using the dictionary
-    if 'SO' in wos_ref_updated.columns:
-        wos_ref_updated['J9_crossref'] = wos_ref_updated['SO'].map(journal_abbreviation_mapping)
+    if 'journal' in wos_ref_updated.columns:
+        wos_ref_updated['J9_crossref'] = wos_ref_updated['journal'].map(journal_abbreviation_mapping)
         logging.info("Mapped 'SO' to 'J9_crossref' using journal_abbreviation_mapping.")
     else:
         wos_ref_updated['J9_crossref'] = None
@@ -219,7 +219,7 @@ def update_wos_ref_with_crossref(wos_ref: pd.DataFrame, doi_column: str = 'DI') 
     
     # Fill 'J9' from 'J9_crossref' where 'J9' is missing
     if 'J9_crossref' in wos_ref_updated.columns:
-        wos_ref_updated['J9'] = wos_ref_updated['J9'].fillna(wos_ref_updated['J9_crossref']).fillna('UNKNOWN')
+        wos_ref_updated['source_title'] = wos_ref_updated['source_title'].fillna(wos_ref_updated['J9_crossref']).fillna('UNKNOWN')
         logging.info("Filled missing 'J9' values from CrossRef data (using 'SO' mapping).")
     else:
         logging.warning("'J9_crossref' column not found in merged dataframe.")
