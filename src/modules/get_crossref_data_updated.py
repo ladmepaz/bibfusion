@@ -112,17 +112,17 @@ def get_crossref_data_updated(doi: str) -> dict:
 
             # Construct the info dictionary with the required fields
             info = {
-                'AF': af,                           # Author
-                'SO': so,                           # Journal
-                'PY': py,                           # Publication Year
-                'DI': di,                           # DOI
+                'author_full_names': af,                           # Author
+                'journal': so,                           # Journal
+                'year': py,                           # Publication Year
+                'doi': di,                           # DOI
                 'abstract': abstract,               # Abstract
-                'TI': ti,                           # Title
+                'title': ti,                           # Title
                 'volume': volume,                   # Volume
                 'issue': issue,                     # Issue
                 'page': page,                       # Page or Article Number
                 'journal_issue_number': journal_issue_number, # Journal Issue Number
-                'ORCID': orcids,                    # Author ORCIDs
+                'orcid': orcids,                    # Author ORCIDs
                 'affiliations': affiliations_str,    # Author Affiliations
             }
             return info
