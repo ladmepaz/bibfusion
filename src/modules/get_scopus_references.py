@@ -302,7 +302,7 @@ def get_scopus_references(scopus_df):
                 extracted_refs.append({
                     'SR': sr_value,
                     'CR_ref': original_ref,
-                    'author': author,
+                    'authors': author,
                     'title': title,
                     'journal': journal if journal else '-',
                     'year': year,
@@ -316,12 +316,18 @@ def get_scopus_references(scopus_df):
 
     # Create 'SR_ref' column as 'First_Author, year, journal'
     references_df['SR_ref'] = references_df.apply(
-        lambda row: f"{row['author'].split(';')[0]}, {row['year']}, {row['journal']}",
+        lambda row: f"{row['authors'].split(';')[0]}, {row['year']}, {row['journal']}",
         axis=1
     )
 
+    # Create 'source_title' in Scopus_df
+    scopus_df['source_title'] = scopus_df['abbreviated_source_title'].str.replace('.', '', regex=False)
+
+    # Create 'source_title' in references_df
+    references_df['source_title'] = scopus_df['source_title']
+    
     # Rearrange columns to the desired order
-    desired_order = ['SR', 'SR_ref', 'title', 'author', 'journal', 'year', 'doi', 'CR_ref']
+    desired_order = ['SR', 'SR_ref', 'title', 'authors', 'journal', 'source_title', 'year', 'doi', 'CR_ref']
     references_df = references_df[desired_order]
 
     return references_df, scopus_df
