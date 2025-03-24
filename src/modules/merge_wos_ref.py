@@ -67,7 +67,7 @@ def merge_wos_ref(wos_df: pd.DataFrame, wos_ref_enriched: pd.DataFrame) -> pd.Da
 
         def prioritize_entries(group):
             # Entries with valid 'DI' (not null, not '-', not empty)
-            valid_di = group['DI'].notnull() & (group['DI'] != '-') & (group['DI'] != '')
+            valid_di = group['doi'].notnull() & (group['doi'] != '-') & (group['doi'] != '')
             valid_entries = group[valid_di]
             if not valid_entries.empty:
                 # If multiple entries have valid 'DI', keep the first one
