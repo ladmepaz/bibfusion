@@ -6,6 +6,8 @@ from modules.get_scopus_references import get_scopus_references
 from modules.enrich_wos_ref import update_wos_ref_with_crossref
 #from modules.enrich_scopus_ref import enrich_scopus_ref
 from modules.merge_wos_ref import merge_wos_ref
+#from modules.get_country import get_country
+from modules.get_wos_author_data import get_wos_author_data
 
 def preprocesing_df(path_wos=None,path_scopus=None):
     
@@ -25,10 +27,15 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         wos_references = get_wos_references(wos_df)
         print("3. Referencias de WoS hecha")
         # Enrich references with Crossref
-        print("4. Referencias de WoS enriquecidas con Crossref")
         enrich_wos_ref = update_wos_ref_with_crossref(wos_references,'doi')
-        merge_wos = merge_wos_ref(wos_df,enrich_wos_ref) 
-        enrich_wos_ref.to_csv('tests/files/enrich_wos_ref.csv', index=False)
+        print("4. Referencias de WoS enriquecidas con Crossref")
+        # Merge WoS and references
+        wos_df = merge_wos_ref(wos_df,enrich_wos_ref)
+        print("5. Dataframe de WoS y referencias unidos")
+        
+        print("6. Get author country")
+        wos_author_raw = get_wos_author_data(wos_df)
+        print("7. Generado 'wos_author_raw'")
         
         
         

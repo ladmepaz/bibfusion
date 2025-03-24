@@ -3,19 +3,19 @@ import re
 def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
     """
     Extracts and aligns author, affiliation, corresponding author, ORCID, ResearcherID, and email information from the wos_df_3 dataframe
-    by selecting 'SR', 'AU', 'AF', 'C1', 'RP', 'OI', 'RI', and 'EM' columns, processing author names, cleaning data,
-    parsing affiliations from 'C1', identifying the corresponding author, extracting ORCID IDs, ResearcherIDs, and emails,
+    by selecting 'SR', 'author', 'author_full_names', 'affiliations', 'reprint_address', 'orcid', 'researcher_id_number', and 'email_address' columns, processing author names, cleaning data,
+    parsing affiliations from 'affiliations', identifying the corresponding author, extracting ORCID IDs, ResearcherIDs, and emails,
     and combining all information into a single dataframe.
 
     Special handling:
     - If AuthorFullName or AuthorName is in special cases (e.g., 'NO, NAME', 'NO NAME', 'NO N', 'NO, AUTHOR', 'NO A'), set AuthorName to 'ANONYMOUS'.
     - Trim leading and trailing whitespace from AuthorName to ensure consistency.
-    - If 'AU' is 'ANONYMOUS' but 'AF' contains author names, replace 'ANONYMOUS' in 'AU' with names from 'AF'.
+    - If 'author' is 'ANONYMOUS' but 'author_full_names' contains author names, replace 'ANONYMOUS' in 'author' with names from 'author_full_names'.
 
     Parameters:
     -----------
     wos_df_3 : pd.DataFrame
-        The dataframe containing article data, including the 'SR', 'AU', 'AF', 'C1', 'RP', 'OI', 'RI', and 'EM' columns.
+        The dataframe containing article data, including the 'SR', 'author', 'author_full_names', 'affiliations', 'reprint_address', 'orcid', 'researcher_id_number', and 'email_address' columns.
 
     Returns:
     --------
@@ -43,24 +43,24 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
     wos_df_cleaned = wos_df_3[~wos_df_3['SR'].isin(invalid_sr_values)].copy()
 
     # Step 2: Create 'wos_authors' dataframe with required columns
-    required_columns = ['SR', 'AU', 'AF', 'C1', 'RP', 'OI', 'RI', 'EM']
+    required_columns = ['SR', 'author', 'author_full_names', 'affiliations', 'reprint_address', 'orcid', 'researcher_id_number', 'email_address']
     for col in required_columns:
         if col not in wos_df_cleaned.columns:
             wos_df_cleaned[col] = ''
     wos_authors = wos_df_cleaned[required_columns].copy()
-    wos_authors['AU'] = wos_authors['AU'].fillna('')
-    wos_authors['AF'] = wos_authors['AF'].fillna('')
-    wos_authors['C1'] = wos_authors['C1'].fillna('')
-    wos_authors['RP'] = wos_authors['RP'].fillna('')
-    wos_authors['OI'] = wos_authors['OI'].fillna('')
-    wos_authors['RI'] = wos_authors['RI'].fillna('')
-    wos_authors['EM'] = wos_authors['EM'].fillna('')
+    wos_authors['author'] = wos_authors['author'].fillna('')
+    wos_authors['author_full_names'] = wos_authors['author_full_names'].fillna('')
+    wos_authors['affiliations'] = wos_authors['affiliations'].fillna('')
+    wos_authors['reprint_address'] = wos_authors['reprint_address'].fillna('')
+    wos_authors['orcid'] = wos_authors['orcid'].fillna('')
+    wos_authors['researcher_id_number'] = wos_authors['researcher_id_number'].fillna('')
+    wos_authors['email_address'] = wos_authors['email_address'].fillna('')
 
-    # Step 3: Split 'AU' and 'AF' by ';'
-    wos_authors['AU'] = wos_authors['AU'].apply(lambda x: [a.strip() for a in x.split(';') if a.strip()])
-    wos_authors['AF'] = wos_authors['AF'].apply(lambda x: [a.strip() for a in x.split(';') if a.strip()])
+    # Step 3: Split 'author' and 'author_full_names' by ';'
+    wos_authors['author'] = wos_authors['author'].apply(lambda x: [a.strip() for a in x.split(';') if a.strip()])
+    wos_authors['author_full_names'] = wos_authors['author_full_names'].apply(lambda x: [a.strip() for a in x.split(';') if a.strip()])
 
-    # Step 4: Assign 'AuthorOrder' and handle missing 'AU' entries
+    # Step 4: Assign 'AuthorOrder' and handle missing 'author' entries
     def generate_abbreviated_name(full_name):
         if not full_name or full_name.strip() == '':
             return ''
@@ -87,25 +87,25 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
         return abbreviated_name
 
     def assign_author_order(row):
-        au_list = row['AU']
-        af_list = row['AF']
+        au_list = row['author']
+        af_list = row['author_full_names']
 
-        # Handle case where 'AU' is 'ANONYMOUS' but 'AF' has author names
+        # Handle case where 'author' is 'ANONYMOUS' but 'author_full_names' has author names
         if len(au_list) == 1 and au_list[0].upper() == 'ANONYMOUS' and len(af_list) > 0 and af_list[0].upper() != 'ANONYMOUS':
-            # Replace 'AU' with 'AF' names
+            # Replace 'author' with 'author_full_names' names
             au_list = [generate_abbreviated_name(af_name) for af_name in af_list]
 
         max_length = max(len(au_list), len(af_list))
         author_order = list(range(1, max_length + 1))
 
-        # Extend 'AU' and 'AF' lists to the same length
+        # Extend 'author' and 'author_full_names' lists to the same length
         au_list += [''] * (max_length - len(au_list))
         af_list += [''] * (max_length - len(af_list))
 
-        # Fill missing 'AU' entries using 'AF'
+        # Fill missing 'author' entries using 'author_full_names'
         for i in range(max_length):
             if au_list[i] == '':
-                # Generate abbreviated name from 'AF' entry
+                # Generate abbreviated name from 'author_full_names' entry
                 af_name = af_list[i]
                 au_list[i] = generate_abbreviated_name(af_name)
         return pd.DataFrame({
@@ -113,11 +113,11 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
             'AuthorOrder': author_order,
             'AuthorName': au_list,
             'AuthorFullName': af_list,
-            'C1': row['C1'],
-            'RP': row['RP'],
-            'OI': row['OI'],
-            'RI': row['RI'],
-            'EM': row['EM']
+            'affiliations': row['affiliations'],
+            'reprint_address': row['reprint_address'],
+            'orcid': row['orcid'],
+            'researcher_id_number': row['researcher_id_number'],
+            'email_address': row['email_address']
         })
 
     # Apply the function
@@ -177,10 +177,10 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
     # Remove leading and trailing whitespace from 'AuthorName' again
     authors_df['AuthorName'] = authors_df['AuthorName'].str.strip()
 
-    # Step 11: Parse 'C1' to extract affiliations
+    # Step 11: Parse 'affiliations' to extract affiliations
     def parse_affiliations(c1_entry):
         """
-        Parses the 'C1' entry to extract a list of dictionaries with 'AuthorFullName' and 'Affiliation'.
+        Parses the 'affiliations' entry to extract a list of dictionaries with 'AuthorFullName' and 'Affiliation'.
         """
         affiliations = []
         if not c1_entry:
@@ -203,7 +203,7 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
         return affiliations
 
     # Apply 'parse_affiliations' to each row to get a list of affiliations per article
-    authors_df['AffiliationsList'] = authors_df['C1'].apply(parse_affiliations)
+    authors_df['AffiliationsList'] = authors_df['affiliations'].apply(parse_affiliations)
 
     # Step 12: Map affiliations to authors (with standardization)
     def standardize_name_for_matching(name):
@@ -221,10 +221,10 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
 
     authors_df['Affiliation'] = authors_df.apply(get_author_affiliation, axis=1)
 
-    # Step 13: Identify the corresponding author based on 'RP' column
+    # Step 13: Identify the corresponding author based on 'reprint_address' column
     def parse_corresponding_author(rp_entry):
         """
-        Parses the 'RP' entry to extract the corresponding author's full name.
+        Parses the 'reprint_address' entry to extract the corresponding author's full name.
         """
         if not rp_entry:
             return None
@@ -245,7 +245,7 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
         return None
 
     # Extract corresponding author name
-    authors_df['CorrespondingAuthorName'] = authors_df['RP'].apply(parse_corresponding_author)
+    authors_df['CorrespondingAuthorName'] = authors_df['reprint_address'].apply(parse_corresponding_author)
 
     # Initialize 'CorrespondingAuthor' column
     authors_df['CorrespondingAuthor'] = False
@@ -279,10 +279,10 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
         if author_name_key == corresponding_author_key:
             authors_df.at[idx, 'CorrespondingAuthor'] = True
 
-    # Step 14: Parse 'OI' to extract ORCID IDs and map to authors
+    # Step 14: Parse 'orcid' to extract ORCID IDs and map to authors
     def parse_orcid_ids(oi_entry):
         """
-        Parses the 'OI' entry to extract a list of dictionaries with 'AuthorFullName' and 'Orcid'.
+        Parses the 'orcid' entry to extract a list of dictionaries with 'AuthorFullName' and 'Orcid'.
         """
         orcid_list = []
         if not oi_entry:
@@ -305,7 +305,7 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
         return orcid_list
 
     # Apply 'parse_orcid_ids' to each row to get a list of ORCID IDs per article
-    authors_df['OrcidList'] = authors_df['OI'].apply(parse_orcid_ids)
+    authors_df['OrcidList'] = authors_df['orcid'].apply(parse_orcid_ids)
 
     # Assign ORCID IDs to authors
     def get_author_orcid(row):
@@ -320,10 +320,10 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
 
     authors_df['Orcid'] = authors_df.apply(get_author_orcid, axis=1)
 
-    # Step 15: Parse 'RI' to extract ResearcherIDs and map to authors
+    # Step 15: Parse 'researcher_id_number' to extract ResearcherIDs and map to authors
     def parse_researcher_ids(ri_entry):
         """
-        Parses the 'RI' entry to extract a list of dictionaries with 'AuthorFullName' and 'ResearcherID'.
+        Parses the 'researcher_id_number' entry to extract a list of dictionaries with 'AuthorFullName' and 'ResearcherID'.
         """
         researcher_id_list = []
         if not ri_entry:
@@ -346,7 +346,7 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
         return researcher_id_list
 
     # Apply 'parse_researcher_ids' to each row to get a list of ResearcherIDs per article
-    authors_df['ResearcherIDList'] = authors_df['RI'].apply(parse_researcher_ids)
+    authors_df['ResearcherIDList'] = authors_df['researcher_id_number'].apply(parse_researcher_ids)
 
     # Assign ResearcherIDs to authors
     def get_author_researcher_id(row):
@@ -364,7 +364,7 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
     # Step 16: Extract emails and assign to authors based on name matching
     def parse_emails(em_entry):
         """
-        Parses the 'EM' entry to extract a list of email addresses.
+        Parses the 'email_address' entry to extract a list of email addresses.
         """
         if not em_entry:
             return []
@@ -375,7 +375,7 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
         return emails
 
     # Apply 'parse_emails' to get the list of emails
-    authors_df['EmailList'] = authors_df['EM'].apply(parse_emails)
+    authors_df['EmailList'] = authors_df['email_address'].apply(parse_emails)
 
     # Assign emails to authors
     def assign_emails(row):
@@ -408,8 +408,8 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
     authors_df['Email'] = authors_df.apply(assign_emails, axis=1)
 
     # Step 17: Drop unnecessary columns and reset index
-    authors_df = authors_df.drop(columns=['C1', 'AffiliationsList', 'RP', 'CorrespondingAuthorName', 'OI',
-                                          'OrcidList', 'RI', 'ResearcherIDList', 'EM', 'EmailList']).reset_index(drop=True)
+    authors_df = authors_df.drop(columns=['affiliations', 'AffiliationsList', 'reprint_address', 'CorrespondingAuthorName', 'orcid',
+                                          'OrcidList', 'researcher_id_number', 'ResearcherIDList', 'email_address', 'EmailList']).reset_index(drop=True)
 
     # Step 18: Select relevant columns
     authors_df = authors_df[['SR', 'AuthorOrder', 'AuthorName', 'AuthorFullName', 'Affiliation',
