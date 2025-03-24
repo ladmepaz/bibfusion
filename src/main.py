@@ -4,7 +4,7 @@ from modules.duplicates import remove_duplicates_df
 from modules.get_wos_references import get_wos_references
 from modules.get_scopus_references import get_scopus_references
 from modules.enrich_wos_ref import update_wos_ref_with_crossref
-#from modules.enrich_scopus_ref import enrich_scopus_ref
+from modules.enrich_scopus_ref import update_scopus_ref_with_crossref
 from modules.merge_wos_ref import merge_wos_ref
 #from modules.get_country import get_country
 from modules.get_wos_author_data import get_wos_author_data
@@ -20,15 +20,19 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         # Dataframe	
         wos_df = wos_txt_to_df(path_wos)
         print("1. Dataframe de WoS hecho")
+
         # Remove duplicates
         wos_df = remove_duplicates_df(wos_df)
         print("2. Duplicados removidos")
+
         # Get references
         wos_references = get_wos_references(wos_df)
         print("3. Referencias de WoS hecha")
+
         # Enrich references with Crossref
         enrich_wos_ref = update_wos_ref_with_crossref(wos_references,'doi')
         print("4. Referencias de WoS enriquecidas con Crossref")
+
         # Merge WoS and references
         wos_df = merge_wos_ref(wos_df,enrich_wos_ref)
         print("5. Dataframe de WoS y referencias unidos")
@@ -51,17 +55,23 @@ def preprocesing_df(path_wos=None,path_scopus=None):
                 Leyendo archivo de Scopus...
               ===============================
               """)
-        # Dataframe
-        print("1. Dataframe de Scopus hecho")
-        scopus_df = scopus_csv_to_df(path_scopus)
-        # Remove duplicates
-        print("2. Duplicados removidos")
-        scopus_df = remove_duplicates_df(scopus_df)
-        # Get references
-        print("3. Referencias de Scopus hecha")
-        scopus_references, scopus_df = get_scopus_references(scopus_df)
         
+        # Dataframe
+        scopus_df = scopus_csv_to_df(path_scopus)
+        print("1. Dataframe de Scopus hecho")
+
+        # Remove duplicates
+        scopus_df = remove_duplicates_df(scopus_df)
+        print("2. Duplicados removidos")
+
+        # Get references
+        scopus_references, scopus_df = get_scopus_references(scopus_df)
+        print("3. Referencias de Scopus hecha")
+        
+        # Enrich references with Crossref
+        enrich_scopus_ref = update_scopus_ref_with_crossref(scopus_references,'doi')
         print("4. Referencias de Scopus Enriquecidas con Crossref")
+        
     else:
         print("""
               No se ha ingresado un archivo de Scopus
@@ -75,10 +85,5 @@ def preprocesing_df(path_wos=None,path_scopus=None):
 
 preprocesing_df('tests/files/wos_5results.txt','tests/files/scopus.csv')
 
-
-
-
-
-#wos_references.to_csv('tests/files/wos_references.csv', index=False)
 
 
