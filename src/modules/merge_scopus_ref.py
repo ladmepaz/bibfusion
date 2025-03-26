@@ -1,5 +1,6 @@
 import logging
 import pandas as pd
+import numpy as np
 
 def merge_scopus_ref(scopus_df_1: pd.DataFrame, scopus_df_2: pd.DataFrame) -> pd.DataFrame:
     """
@@ -67,7 +68,7 @@ def merge_scopus_ref(scopus_df_1: pd.DataFrame, scopus_df_2: pd.DataFrame) -> pd
 
         def prioritize_entries(group):
             # Entries with valid 'DI' (not null, not '-', not empty)
-            valid_di = group['DI'].notnull() & (group['DI'] != '-') & (group['DI'] != '')
+            valid_di = group['doi'].notnull() & (group['doi'] != '-') & (group['doi'] != '')
             valid_entries = group[valid_di]
             if not valid_entries.empty:
                 # If multiple entries have valid 'DI', keep the first one
@@ -84,32 +85,36 @@ def merge_scopus_ref(scopus_df_1: pd.DataFrame, scopus_df_2: pd.DataFrame) -> pd
         logging.warning("'SR' column not found in scopus_df_2; cannot remove duplicates based on 'SR'.")
 
     # Step 3: Align Columns for Concatenation
-    # Get list of all columns in both dataframes
-    scopus_df_1_columns = set(scopus_df_1.columns)
-    scopus_ref_columns = set(scopus_ref_cleaned.columns)
+    # Get list of common columns
+    common_columns = list(set(scopus_df_1.columns) & set(scopus_ref_cleaned.columns))
 
-    # Find columns missing in scopus_ref_cleaned
-    missing_in_refs = scopus_df_1_columns - scopus_ref_columns
-    for col in missing_in_refs:
-        scopus_ref_cleaned[col] = None  # Assign None or appropriate default value
+    # Select only common columns and non-empty/non-NA columns
+    def get_non_empty_cols(df):
+        return [col for col in common_columns if not df[col].isna().all()]
 
-    # Find columns missing in scopus_df_1
-    missing_in_scopus_df_1 = scopus_ref_columns - scopus_df_1_columns
-    for col in missing_in_scopus_df_1:
-        scopus_df_1[col] = None  # Assign None or appropriate default value
+    scopus_df_1_cols = get_non_empty_cols(scopus_df_1)
+    scopus_ref_cols = get_non_empty_cols(scopus_ref_cleaned)
+    
+    # Use the intersection of non-empty columns
+    final_columns = list(set(scopus_df_1_cols) & set(scopus_ref_cols))
 
-    # Ensure both dataframes have the same column order
-    scopus_ref_cleaned = scopus_ref_cleaned[scopus_df_1.columns]
+    # Subset both dataframes to these columns
+    scopus_df_1_subset = scopus_df_1[final_columns]
+    scopus_ref_cleaned_subset = scopus_ref_cleaned[final_columns]
 
     logging.info("Aligned columns between scopus_df_1 and scopus_ref_cleaned for concatenation.")
 
     # Step 4: Concatenate DataFrames
-    combined_df = pd.concat([scopus_df_1, scopus_ref_cleaned], ignore_index=True)
+    combined_df = pd.concat([scopus_df_1_subset, scopus_ref_cleaned_subset], ignore_index=True)
     logging.info("Concatenated scopus_df_1 and scopus_ref_cleaned into combined_df.")
 
     # Step 5: Remove Duplicates in 'SR' Column, Keeping 'ismainarticle' == 'TRUE'
     if 'SR' in combined_df.columns:
         logging.info("Removing duplicates in combined_df based on 'SR', keeping entries where 'ismainarticle' == 'TRUE'.")
+
+        # Add back the 'ismainarticle' column
+        combined_df['ismainarticle'] = 'FALSE'
+        combined_df.loc[combined_df.index < len(scopus_df_1_subset), 'ismainarticle'] = 'TRUE'
 
         # Sort the dataframe so that rows with 'ismainarticle' == 'TRUE' come first
         combined_df['ismainarticle_order'] = combined_df['ismainarticle'] == 'TRUE'
@@ -118,7 +123,7 @@ def merge_scopus_ref(scopus_df_1: pd.DataFrame, scopus_df_2: pd.DataFrame) -> pd
         # Remove duplicates based on 'SR', keeping the first occurrence
         combined_df = combined_df.drop_duplicates(subset='SR', keep='first')
 
-        # Drop the temporary 'ismainarticle_order' column
+        # Drop the temporary columns
         combined_df = combined_df.drop(columns=['ismainarticle_order'])
 
         logging.info("Removed duplicates in combined_df based on 'SR'.")
