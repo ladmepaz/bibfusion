@@ -173,7 +173,7 @@ def get_wos_references(wos_df_1):
     ValueError
         If the input DataFrame does not contain the required 'source_title' and 'references' columns.
     """
-    required_columns = ['source_title', 'references']
+    required_columns = ['source_title', 'references', 'SR']
     
     # Check if required columns are present in the input DataFrame
     missing_columns = [col for col in required_columns if col not in wos_df_1.columns]
@@ -224,5 +224,6 @@ def get_wos_references(wos_df_1):
     
     # Select and return only the 'source_title', 'CR_ref', 'authors', 'year', 'references', 'doi', and 'SR_ref' columns
     final_df = wos_exploded_df[['source_title', 'CR_ref', 'authors', 'year', 'doi', 'SR_ref']].copy()
+    wos_citation = wos_exploded_df[['SR', 'SR_ref']].copy()
     
-    return final_df
+    return final_df, wos_citation
