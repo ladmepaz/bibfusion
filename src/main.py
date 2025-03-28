@@ -9,6 +9,7 @@ from modules.merge_wos_ref import merge_wos_ref
 from modules.merge_scopus_ref import merge_scopus_ref
 #from modules.get_country import get_country
 from modules.get_wos_author_data import get_wos_author_data
+from modules.enrich_wos_author_data import enrich_wos_author_data
 
 def preprocesing_df(path_wos=None,path_scopus=None):
     
@@ -45,6 +46,10 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         wos_author_raw = get_wos_author_data(wos_df)
         print("7. Generado 'wos_author_raw'")
         
+        # Enrich author data
+        wos_author_enriched = enrich_wos_author_data(wos_author_raw)
+        print("8. Enriched 'wos_author_raw'")
+        print(wos_author_enriched.columns)
         
         
     else:
@@ -83,8 +88,7 @@ def preprocesing_df(path_wos=None,path_scopus=None):
     else:
         print("""
               No se ha ingresado un archivo de Scopus
-              """)
-        
+              """) 
  
     
     
