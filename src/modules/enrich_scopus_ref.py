@@ -12,7 +12,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-def enrich_wos_ref(doi: str) -> dict:
+def enrich_scopus_ref(doi: str) -> dict:
     """
     Queries the CrossRef API to extract selected information from a DOI.
     
@@ -125,7 +125,7 @@ def enrich_wos_ref(doi: str) -> dict:
     except Exception as e:
         return {"error": f"An unexpected error occurred: {e}"}
 
-def update_wos_ref_with_crossref(wos_ref: pd.DataFrame, doi_column: str = 'doi') -> pd.DataFrame:
+def update_scopus_ref_with_crossref(wos_ref: pd.DataFrame, doi_column: str = 'doi') -> pd.DataFrame:
     """
     Updates the wos_ref dataframe with additional information from CrossRef based on unique DOIs.
 

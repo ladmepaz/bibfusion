@@ -77,8 +77,9 @@ def scopus_csv_to_df(file_path):
 
         rename_columns = {
             'authors':'author', 'art_no':'article_number', 'language_of_original_document': 'language',
-            'open_access':'open_access_indicator'
+            'open_access':'open_access_indicator', 'source_title':'journal'
         }
+        df.rename(columns=rename_columns, inplace=True)
         return df
 
     except FileNotFoundError:

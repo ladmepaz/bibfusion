@@ -1,17 +1,14 @@
 import pandas as pd
 
-def remove_duplicates(file_path: str, search: int = 1) -> pd.DataFrame:
+def remove_duplicates_df(dataframe: pd.DataFrame) -> pd.DataFrame:
     """
-    Remove duplicate rows based on DOI ('DI') and Title ('TI') columns from an Excel file,
+    Remove duplicate rows based on DOI ('DI') and Title ('TI') columns from a DataFrame,
     while preserving rows where either DOI or Title cells are empty.
 
     Parameters
     ----------
-    file_path : str
-        The file path of the Excel file to read and process.
-    search : int (default value = 1)
-        Select the method for search the file. The default value is 1 (it means that the file,
-        is storaged locally.) But if search = 2, the search is going to be through web-scrapping.
+    dataframe : pd.DataFrame
+        The DataFrame to process.
 
     Returns
     -------
@@ -22,46 +19,38 @@ def remove_duplicates(file_path: str, search: int = 1) -> pd.DataFrame:
     Raises
     ------
     ValueError
-        If the Excel file does not contain the required 'DI' or 'TI' columns.
+        If the DataFrame does not contain the required 'DI' or 'TI' columns.
 
     Notes
     -----
     The function first removes duplicates only where DOI ('DI') or Title ('TI') are not empty,
     then combines these rows with rows where both DOI and Title are empty to preserve them.
-    The cleaned DataFrame is saved as a new Excel file named 'cleaned_EM_407_DF.xlsx'.
 
     Example
     -------
-    >>> file_path = '/path/to/your/excel_file.xlsx'
-    >>> cleaned_df = remove_duplicates(file_path)
+    >>> df = pd.DataFrame({'DI': ['10.1234', '10.5678', None], 'TI': ['Title1', 'Title2', None]})
+    >>> cleaned_df = remove_duplicates_df(df)
     >>> print(cleaned_df)
     """
 
-    if (search == 1):
-        # Leer el excel principal
-        df = pd.read_excel(file_path)
-    elif (search == 2):
-        # Leer excel desde clave
-        df = pd.read_csv(f'https://docs.google.com/spreadsheets/d/{file_path}/export?format=csv&usp=sharing')
-
-    # Confirmar que existe la columna DI o TI
-    if 'DI' not in df.columns or 'TI' not in df.columns:
-        raise ValueError("The file doesn't contain the columns 'DI' or 'TI'.")
+    # Confirmar que existe la columna DI o title
+    if 'doi' not in dataframe.columns or 'title' not in dataframe.columns:
+        raise ValueError("The DataFrame doesn't contain the columns 'DI' or 'title'.")
 
     # Filtro (Dataframe sin valores nulos)
-    df_cleaned = df[
-        df['DI'].notna() | df['TI'].notna()  # Eliminar las celdas sin valores.
+    df_cleaned = dataframe[
+        dataframe['doi'].notna() | dataframe['title'].notna()  # Eliminar las celdas sin valores.
     ].drop_duplicates(
-        subset=['DI', 'TI'],
+        subset=['doi', 'title'],
         keep='first'
     )
 
     # Dataframe con valores nulos
-    df_empty = df[
-        df['DI'].isna() & df['TI'].isna()
+    df_empty = dataframe[
+        dataframe['doi'].isna() & dataframe['title'].isna()
     ]
 
     df_final = pd.concat([df_cleaned, df_empty])
 
-    # Exportar
+    # Retornar el DataFrame limpio
     return df_final

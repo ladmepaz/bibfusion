@@ -205,7 +205,7 @@ def wos_txt_to_df(file_path):
 
         # Rename columns
         rename_columns = {
-            'AU': 'authors', 'AF': 'author_full_names', 'CR': 'references', 'AB': 'abstract', 'AR': 'article_number',
+            'AU': 'author', 'AF': 'author_full_names', 'CR': 'references', 'AB': 'abstract', 'AR': 'article_number',
             'BP': 'page_start', 'C1': 'affiliations', 'C3': 'affiliation_2', 'CL': 'conference_location', 'CT': 'conference_title',
             'CY': 'conference_year', 'DA': 'date', 'DE': 'author_keywords', 'DI': 'doi', 'DT': 'document_type', 'EA': 'early_access_date',
             'EI': 'eissn', 'EM': 'email_address', 'EP': 'page_end', 'FU': 'funding_agency', 'FX': 'funding_details',
@@ -214,9 +214,9 @@ def wos_txt_to_df(file_path):
             'NR': 'cited_reference_count', 'OA': 'open_access_indicator', 'OI': 'orcid', 'PA': 'publisher_address', 'PD': 'publication_date',
             'PG': 'page_count', 'PI': 'city_publisher', 'PM': 'pubmed_id', 'PN': 'part_number', 'PT': 'publication_type', 'PU': 'publisher',
             'PY': 'year', 'RI': 'researcher_id_number', 'RP': 'reprint_address', 'SC': 'subject_category', 'SI': 'special_issue',
-            'SN': 'issn', 'SO': 'journal', 'SP': 'conference_sponsor', 'SU': 'conference_host', 'TC': 'cited_by', 'TI': 'title',
+            'SN': 'issn', 'SO': 'journal', 'SP': 'conference_sponsor', 'SU': 'supplement', 'TC': 'cited_by', 'TI': 'title',
             'U1': 'usage_count_last_180_days', 'U2': 'usage_count_since_2013', 'UT': 'accession_number', 'VL': 'volume', 'WC': 'web_of_science_categories',
-            'WE': 'web_of_science_entry', 'Z9': 'total_times_cited', 'DB': 'source', 'SR': 'source_title'
+            'WE': 'web_of_science_entry', 'Z9': 'total_times_cited', 'DB': 'source'
         }
         
 

@@ -102,12 +102,16 @@ def scopus_refs(dataframe):
     #df_nuevo.to_excel('datos_extraidos_con_tipos.xlsx', index=False)
     return df_nuevo
 
+######
+# Ejemplo de uso
+######
 
 # URL del Google Sheet exportado como CSV
-google_sheet_url = 'https://docs.google.com/spreadsheets/d/15I7DNXFtvT3N5ELQ6l5rXD51r5d8T9TtgPmDvdGGMnI/export?format=csv&gid=227674128'
+# https://docs.google.com/spreadsheets/d/15I7DNXFtvT3N5ELQ6l5rXD51r5d8T9TtgPmDvdGGMnI/export?format=csv&gid=227674128
+# google_sheet_url = 'https://docs.google.com/spreadsheets/d/15I7DNXFtvT3N5ELQ6l5rXD51r5d8T9TtgPmDvdGGMnI/export?format=csv&gid=227674128'
 
 # Cargar los datos en un DataFrame
-df = pd.read_csv(google_sheet_url)
+# df = pd.read_csv(google_sheet_url)
 
-df_ref = scopus_refs(df)
-print(df)
+# df_ref = scopus_refs(df)
+# print(df)
