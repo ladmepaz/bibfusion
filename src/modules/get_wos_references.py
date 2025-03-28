@@ -223,6 +223,6 @@ def get_wos_references(wos_df_1):
     wos_exploded_df['SR_ref'] = wos_exploded_df[['authors', 'year', 'source_title']].agg(', '.join, axis=1)
     
     # Select and return only the 'source_title', 'CR_ref', 'authors', 'year', 'references', 'doi', and 'SR_ref' columns
-    final_df = wos_exploded_df[['source_title', 'CR_ref', 'authors', 'year', 'references', 'doi', 'SR_ref']].copy()
+    final_df = wos_exploded_df[['source_title', 'CR_ref', 'authors', 'year', 'doi', 'SR_ref']].copy()
     
     return final_df
