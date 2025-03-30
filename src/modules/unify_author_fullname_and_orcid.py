@@ -144,4 +144,10 @@ def unify_author_fullname_and_orcid(
     'UnifiedOrcid': 'Orcid'
     })
 
-    return final_df
+    # Create the three DataFrames
+    wos_author = final_df[['AuthorID', 'AuthorName', 'AuthorFullName', 'Orcid', 'ResearcherID', 'Email']]
+    articleauthor = final_df[['SR', 'AuthorID', 'AuthorOrder', 'CorrespondingAuthor']]
+    wos_author_affiliation = final_df[['SR', 'AuthorID', 'Affiliation']]
+
+    # Return the three DataFrames as a list
+    return [wos_author, articleauthor, wos_author_affiliation]
