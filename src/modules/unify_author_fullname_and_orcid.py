@@ -125,17 +125,23 @@ def unify_author_fullname_and_orcid(
     final_df['UnifiedOrcid'] = final_df['UnifiedOrcid'].fillna('NO ORCID')
     final_df['UnifiedName'] = final_df['UnifiedName'].str.rstrip('.')
     # Create the AuthorID column by concatenating AuthorName, AuthorFullName, and UnifiedOrcid
-    wos_author_enriched_1['AuthorID'] = (
-        wos_author_enriched_1['AuthorName'] + '_' +
-        wos_author_enriched_1['AuthorFullName'] + '_' +
-        wos_author_enriched_1['UnifiedOrcid']
+    final_df['AuthorID'] = (
+        final_df['AuthorName'] + '_' +
+        final_df['AuthorFullName'] + '_' +
+        final_df['UnifiedOrcid']
     )
     # Clean the AuthorID column: remove special characters and replace spaces with underscores
-    wos_author_enriched_1['AuthorID'] = (
-        wos_author_enriched_1['AuthorID']
+    final_df['AuthorID'] = (
+        final_df['AuthorID']
         .str.replace(r'[.,]', '', regex=True)  # Remove '.' and ','
         .str.replace(r'\s+', '_', regex=True)  # Replace spaces with '_'
     )
 
+    final_df = final_df.rename(columns={
+    'AuthorFullName': 'AuthorFullName_old',
+    'UnifiedName': 'AuthorFullName',
+    'Orcid': 'Orcid_old',
+    'UnifiedOrcid': 'Orcid'
+    })
 
     return final_df
