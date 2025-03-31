@@ -127,7 +127,7 @@ def unify_author_fullname_and_orcid(
     # Create the AuthorID column by concatenating AuthorName, AuthorFullName, and UnifiedOrcid
     final_df['AuthorID'] = (
         final_df['AuthorName'] + '_' +
-        final_df['AuthorFullName'] + '_' +
+        final_df['UnifiedName'] + '_' +
         final_df['UnifiedOrcid']
     )
     # Clean the AuthorID column: remove special characters and replace spaces with underscores
