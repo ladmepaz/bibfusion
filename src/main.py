@@ -22,15 +22,13 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         # Dataframe	
         wos_df = wos_txt_to_df(path_wos)
         print("1. Dataframe de WoS hecho")
-
         # Remove duplicates
         wos_df = remove_duplicates_df(wos_df)
         print("2. Duplicados removidos")
 
         # Get references
-        wos_references = get_wos_references(wos_df)
+        wos_references, wos_citation = get_wos_references(wos_df)
         print("3. Referencias de WoS hecha")
-
         # Enrich references with Crossref
         enrich_wos_ref = update_wos_ref_with_crossref(wos_references,'doi')
         print("4. Referencias de WoS enriquecidas con Crossref")
