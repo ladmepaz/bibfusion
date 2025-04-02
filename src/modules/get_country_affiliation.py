@@ -2,11 +2,24 @@ import pandas as pd
 import re
 import os
 
+def fill_missing_affiliations(df):
+    """
+    Rellena los valores vacíos o espacios en blanco en la columna 'Affiliation' con 'NO AFFILIATION'.
+        
+    Parámetros:
+        df (pd.DataFrame): DataFrame con la columna 'Affiliation'.
+        
+    Retorna:
+        pd.DataFrame: DataFrame con los valores corregidos en 'Affiliation'.
+    """
+    df["Affiliation"] = df["Affiliation"].fillna("NO AFFILIATION.").replace(r"^\s*$", "NO AFFILIATION.", regex=True)
+    return df
+
 def extract_countries(df, country_codes_file):
     """
-    Extrae países de la columna 'Affiliation' y crea una nueva columna 'Country' 
-    con los países en mayúsculas separados por punto y coma.
-    Mantiene los países duplicados si aparecen varias veces.
+    Extrae países de la columna 'Affiliation' y crea una nueva columna 'Country'.
+    Procesa cada afiliación separada por punto y coma individualmente.
+    Coloca "NO COUNTRY" donde no se detecte ningún país.
     
     Args:
         df (pandas.DataFrame): DataFrame con la columna 'Affiliation'
@@ -15,19 +28,6 @@ def extract_countries(df, country_codes_file):
     Returns:
         pandas.DataFrame: DataFrame con la nueva columna 'Country'
     """
-    def fill_missing_affiliations(df):
-        """
-        Rellena los valores vacíos o espacios en blanco en la columna 'Affiliation' con 'NO AFFILIATION'.
-        
-        Parámetros:
-            df (pd.DataFrame): DataFrame con la columna 'Affiliation'.
-        
-        Retorna:
-            pd.DataFrame: DataFrame con los valores corregidos en 'Affiliation'.
-        """
-        df["Affiliation"] = df["Affiliation"].fillna("NO AFFILIATION.").replace(r"^\s*$", "NO AFFILIATION.", regex=True)
-        return df
-    fill_missing_affiliations(df)
     # Cargar el archivo de códigos de países
     if os.path.exists(country_codes_file):
         country_codes = pd.read_csv(country_codes_file, delimiter=';', header=None, names=['code', 'name'])
@@ -42,6 +42,10 @@ def extract_countries(df, country_codes_file):
         all_country_names = country_codes['name'].tolist()
         all_country_codes = country_codes['code'].tolist()
         
+        # Ordenar países por longitud (descendente) para evitar coincidencias parciales
+        all_country_names = sorted(all_country_names, key=len, reverse=True)
+        all_country_codes = sorted(all_country_codes, key=len, reverse=True)
+        
         # Diccionario para mapear nombres a sí mismos (para normalización)
         name_to_name = {name: name for name in all_country_names}
         
@@ -51,38 +55,61 @@ def extract_countries(df, country_codes_file):
         print(f"El archivo {country_codes_file} no existe. No se realizará la extracción de países.")
         return df
     
-    # Función para extraer países de una afiliación
-    def extract_countries_from_affiliation(affiliation):
-        if pd.isna(affiliation) or affiliation.strip().upper() == 'NO AFFILIATION':
-            return ""
+    # Función para extraer países de una única afiliación
+    def extract_countries_from_single_affiliation(single_affiliation):
+        if pd.isna(single_affiliation) or not single_affiliation.strip():
+            return "NO COUNTRY"
+        
+        if single_affiliation.strip().upper() == 'NO AFFILIATION':
+            return "NO COUNTRY"
         
         # Convertir a mayúsculas
-        affiliation = affiliation.upper()
+        single_affiliation = single_affiliation.upper().strip()
         
-        # Lista para almacenar países encontrados (manteniendo duplicados)
-        found_countries = []
+        # Conjunto para almacenar países encontrados (evita duplicados dentro de una misma afiliación)
+        found_countries = set()
         
         # Buscar códigos de países en la afiliación
         for code in all_country_codes:
             pattern = r'\b' + re.escape(code) + r'\b'
-            matches = re.findall(pattern, affiliation)
-            # Agregar el país por cada coincidencia encontrada
-            for _ in range(len(matches)):
-                found_countries.append(country_map[code])
+            if re.search(pattern, single_affiliation):
+                # Usar el nombre completo del país en mayúsculas
+                found_countries.add(country_map[code])
         
         # Buscar nombres de países en la afiliación
         for name in all_country_names:
             pattern = r'\b' + re.escape(name) + r'\b'
-            matches = re.findall(pattern, affiliation)
-            # Agregar el país por cada coincidencia encontrada
-            for _ in range(len(matches)):
-                found_countries.append(name)
+            if re.search(pattern, single_affiliation):
+                found_countries.add(name)
         
-        # Unir con punto y coma, manteniendo todas las ocurrencias
-        return "; ".join(found_countries) if found_countries else ""
+        # Si no se encontró ningún país, devolver "NO COUNTRY"
+        if not found_countries:
+            return "NO COUNTRY"
+        
+        # Convertir conjunto a lista y unir con punto y coma
+        return "; ".join(sorted(list(found_countries)))
+    
+    # Función para procesar múltiples afiliaciones separadas por punto y coma
+    def process_multiple_affiliations(affiliations_text):
+        if pd.isna(affiliations_text):
+            return "NO COUNTRY"
+        
+        # Dividir por punto y coma para procesar cada afiliación individualmente
+        affiliations_list = affiliations_text.split(';')
+        
+        # Procesar cada afiliación individualmente
+        country_results = []
+        for affiliation in affiliations_list:
+            affiliation = affiliation.strip()
+            # Incluso si la afiliación está vacía, procesarla para que se agregue "NO COUNTRY"
+            country_result = extract_countries_from_single_affiliation(affiliation)
+            country_results.append(country_result)
+        
+        # Unir los resultados con punto y coma, manteniendo la estructura original
+        return "; ".join(country_results)
     
     # Aplicar la función a cada fila del DataFrame
-    df['Country'] = df['Affiliation'].apply(extract_countries_from_affiliation)
+    df['Country'] = df['Affiliation'].apply(process_multiple_affiliations)
     
     return df
 
@@ -95,7 +122,7 @@ def main():
     # Cargar datos
     try:
         df = pd.read_csv(data_file)
-        
+        df = fill_missing_affiliations(df)
         # Verificar si existe la columna 'Affiliation'
         if 'Affiliation' not in df.columns:
             print(f"Error: El archivo {data_file} no contiene la columna 'Affiliation'")
