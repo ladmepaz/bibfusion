@@ -1,3 +1,5 @@
+import pandas as pd
+
 def enrich_wos_journals(wos_df_4, scimago):
     """
     1) First merge:
