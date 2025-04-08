@@ -55,8 +55,10 @@ def fix_missing_journal_references(wos_df_3):
 
     # 5) Overwrite the old 'journal' in the reference subset with the new unified values
     df.loc[ref_mask, 'journal'] = chosen_expansions
-
-    df = df[['SR', 'issn', 'source_title', 'journal_abbreviation', 'journal']]
+    if 'journal_abbreviation' in df.columns:
+        df = df[['SR', 'issn', 'source_title', 'journal_abbreviation', 'journal']]
+    else:
+        df = df[['SR', 'issn', 'source_title','abbreviated_source_title', 'journal']]
 
     # Return the updated dataframe
     return df
