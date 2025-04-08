@@ -153,4 +153,4 @@ def unify_author_fullname_and_orcid(
     wos_author_affiliation = wos_author_affiliation.drop_duplicates()
 
     # Return the three DataFrames as a list
-    return [wos_author, articleauthor, wos_author_affiliation]
+    return wos_author, articleauthor, wos_author_affiliation
