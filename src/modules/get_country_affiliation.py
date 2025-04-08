@@ -114,33 +114,33 @@ def extract_countries(df, country_codes_file):
     return df
 
 # Ejemplo de uso
-def main():
-    # Ruta a los archivos (ajustar según sea necesario)
-    data_file = r"tests\files\wos_author_affiliation.csv"
-    country_codes_file = r"tests\files\country.csv"
+# def main():
+#     # Ruta a los archivos (ajustar según sea necesario)
+#     data_file = r"tests\files\wos_author_affiliation.csv"
+#     country_codes_file = r"tests\files\country.csv"
     
-    # Cargar datos
-    try:
-        df = pd.read_csv(data_file)
-        df = fill_missing_affiliations(df)
-        # Verificar si existe la columna 'Affiliation'
-        if 'Affiliation' not in df.columns:
-            print(f"Error: El archivo {data_file} no contiene la columna 'Affiliation'")
-            return
+#     # Cargar datos
+#     try:
+#         df = pd.read_csv(data_file)
+#         df = fill_missing_affiliations(df)
+#         # Verificar si existe la columna 'Affiliation'
+#         if 'Affiliation' not in df.columns:
+#             print(f"Error: El archivo {data_file} no contiene la columna 'Affiliation'")
+#             return
         
-        # Procesar datos
-        result_df = extract_countries(df, country_codes_file)
+#         # Procesar datos
+#         result_df = extract_countries(df, country_codes_file)
         
-        # Guardar resultado
-        result_df.to_csv("affiliations_with_countries.csv", index=False)
-        print("Procesamiento completado. Resultado guardado en 'affiliations_with_countries.csv'")
+#         # Guardar resultado
+#         result_df.to_csv("affiliations_with_countries.csv", index=False)
+#         print("Procesamiento completado. Resultado guardado en 'affiliations_with_countries.csv'")
         
-        # Mostrar algunas filas para verificar
-        print("\nPrimeras filas del resultado:")
-        print(result_df[['Affiliation', 'Country']].head())
+#         # Mostrar algunas filas para verificar
+#         print("\nPrimeras filas del resultado:")
+#         print(result_df[['Affiliation', 'Country']].head())
         
-    except Exception as e:
-        print(f"Error al procesar el archivo: {e}")
+#     except Exception as e:
+#         print(f"Error al procesar el archivo: {e}")
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
