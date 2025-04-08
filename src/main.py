@@ -77,17 +77,17 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         wos_author_raw = get_wos_author_data(wos_df_3)
         print("8. Generado 'wos_author_raw'")
         
-        # # Enrich author data
+        # Enrich author data
         wos_author_enriched = enrich_wos_author_data(wos_author_raw)
         print("9. Enriched 'wos_author_raw'")
         
-        # # Merge WoS and author data
-        wos_author, articleauthor, wos_author_affiliation = unify_author_fullname_and_orcid(wos_author_enriched)
+        # Merge WoS and author data
+        wos_author, articleauthor_wos, wos_author_affiliation = unify_author_fullname_and_orcid(wos_author_enriched)
         print("10. Unificado 'wos_author_enriched'")
 
         # Get country affiliation
         country_codes_file = r"tests\files\country.csv"
-        #wos_author_affiliation = extract_countries(wos_author_affiliation, country_codes_file)
+        wos_author_affiliation = extract_countries(wos_author_affiliation, country_codes_file)
         print("11. Paises de afiliación extraídos")
 
      
@@ -127,9 +127,27 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         scopus_df_2 = fix_missing_journal_references(scopus_df)
         print("6. Fix missing journal references")	
         
+        # =======================================================
+        # scopus_df_3 = enrich_wos_journals(scopus_df_2, scimago)
+        print("7. Enriched Scopus journals with Scimago")
+
         # Get author data
         scopus_author_raw = get_scopus_author_data(scopus_df_3)
         print("8. Generado 'scopus_author_raw'")
+
+        # Enrich author data
+        scopus_author_enriched = enrich_wos_author_data(scopus_author_raw)
+        print("9. Enriched 'wos_author_raw'")
+
+        # Merge Scopus and author data
+        scopus_author, articleauthor_scopus, scopus_author_affiliation = unify_author_fullname_and_orcid(scopus_author_enriched)
+        print("10. Unificado 'wos_author_enriched'")
+        
+        # Get country affiliation
+        country_codes_file = r"tests\files\country.csv"
+        scopus_author_affiliation = extract_countries(scopus_author_affiliation, country_codes_file)
+        print("11. Paises de afiliación extraídos")
+
     else:
         print("""
               No se ha ingresado un archivo de Scopus
@@ -140,7 +158,7 @@ def preprocesing_df(path_wos=None,path_scopus=None):
     return None
 
 
-preprocesing_df(r'tests\files\wos_3results.txt','tests/files/scopus.csv')
+preprocesing_df(None,'tests/files/scopus.csv')
 
 
 
