@@ -266,8 +266,8 @@ def get_scopus_references(scopus_df):
     pd.DataFrame
         A DataFrame with columns 'SR', 'SR_ref', 'title', 'author', 'journal', 'year', 'doi', 'CR_ref'.
     """
-    
-    scopus_df = create_SR_column(scopus_df, author_col='author', year_col='year', journal_col='journal')
+    scopus_df['source_title'] = scopus_df['abbreviated_source_title'].str.replace('.', '', regex=False)
+    scopus_df = create_SR_column(scopus_df, author_col='author', year_col='year', journal_col='source_title')
     scopus_df_copy = scopus_df[['SR', 'references']].copy()
     extracted_refs = []
 
@@ -320,8 +320,6 @@ def get_scopus_references(scopus_df):
         axis=1
     )
 
-    # Create 'source_title' in Scopus_df
-    scopus_df['source_title'] = scopus_df['abbreviated_source_title'].str.replace('.', '', regex=False)
 
     # Create 'source_title' in references_df
     references_df['source_title'] = scopus_df['source_title']
