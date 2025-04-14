@@ -2,330 +2,404 @@ import pandas as pd
 import re
 import urllib.parse
 
-def extract_authors(cr_ref):
+def process_scopus_references(df):
     """
-    Extracts author from the reference string and returns the remaining text.
+    Procesa un DataFrame de Scopus para extraer y estructurar sus referencias bibliográficas.
 
     Parameters:
-    ----------
-    cr_ref : str
-        A reference string from which to extract author.
+    -----------
+    df : pandas.DataFrame
+        DataFrame que debe contener al menos las columnas:
+        - 'references': Referencias bibliográficas en formato texto
+        - 'abbreviated_source_title': (opcional) Nombre abreviado de la fuente
+        - 'author': (opcional) Autores del documento fuente
+        - 'year': (opcional) Año de publicación del documento fuente
 
     Returns:
-    -------
-    tuple
-        - authors_str: A semicolon-separated string of author in the format 'LASTNAME INITIALS'.
-        - remaining_text: The remaining text of cr_ref after the author are extracted.
+    --------
+    pandas.DataFrame
+        DataFrame con las referencias procesadas y estructuradas contiendo las columnas:
+        - 'SR': Identificador del documento fuente
+        - 'SR_ref': Identificador de la referencia (Primer_Autor, año, revista)
+        - 'title': Título de la referencia
+        - 'authors': Autores de la referencia (separados por ';')
+        - 'journal': Revista de la referencia
+        - 'year': Año de publicación de la referencia
+        - 'volume': Volumen de la revista
+        - 'pages': Páginas del artículo
+        - 'doi': DOI del artículo
+        - 'CR_ref': Texto original de la referencia
     """
-    tokens = cr_ref.split(', ')
-    author_list = []  # Debe mantenerse como lista hasta el return
-    i = 0
-    while i < len(tokens):
-        last_name = tokens[i]
-        if i + 1 < len(tokens):
-            initials = tokens[i + 1]
-            last_name_pattern = r'^[A-Z][A-Za-z\'\-]*$'  # Allows for hyphens and apostrophes
-            initials_pattern = r'^([A-Z](?:\.[A-Z])*\.?\s*)+$'  # Matches initials like 'C.M.'
-            if re.match(last_name_pattern, last_name) and re.match(initials_pattern, initials):
-                # Clean initials by removing periods and spaces
-                initials_clean = re.sub(r'[.\s]', '', initials)
-                author = f"{last_name} {initials_clean}"  # Crear un string para el autor actual
-                author_list.append(author)  # Añadir el autor a la lista
-                i += 2
-            else:
-                break
+    # Verificar que exista la columna 'references'
+    if 'references' not in df.columns:
+        raise ValueError("El DataFrame debe contener la columna 'references'")
+    
+    # Crear copia del DataFrame para no modificar el original
+    scopus_df = df.copy()
+    
+    # Preparar columna 'source_title'
+    if 'abbreviated_source_title' in scopus_df.columns:
+        scopus_df['source_title'] = scopus_df['abbreviated_source_title'].str.replace('.', '', regex=False)
+    else:
+        scopus_df['source_title'] = '-'
+    
+    # Crear columna 'SR' si no existe pero tenemos 'author' y 'year'
+    if 'SR' not in scopus_df.columns and 'author' in scopus_df.columns and 'year' in scopus_df.columns:
+        scopus_df = _create_sr_column(scopus_df)
+    elif 'SR' not in scopus_df.columns:
+        # Crear un ID único si no hay SR ni se puede crear
+        scopus_df['SR'] = [f"DOC_{i+1}" for i in range(len(scopus_df))]
+    
+    # Extraer y procesar las referencias
+    references_list = []
+    
+    for _, row in scopus_df.iterrows():
+        sr_value = row['SR']
+        references_text = str(row['references'])
+        
+        # Separar múltiples referencias (por punto y coma)
+        individual_refs = [ref.strip() for ref in re.split(r';\s*', references_text) if ref.strip()]
+        
+        # Procesar cada referencia individual
+        for ref_text in individual_refs:
+            reference_data = _parse_reference(ref_text)
+            if reference_data:  # Si se pudo procesar correctamente
+                reference_data['SR'] = sr_value
+                reference_data['CR_ref'] = ref_text
+                references_list.append(reference_data)
+    
+    # Si no hay referencias procesadas, devolver DataFrame vacío
+    if not references_list:
+        return pd.DataFrame()
+    
+    # Crear DataFrame con las referencias procesadas
+    references_df = pd.DataFrame(references_list)
+    
+    # Crear columna 'SR_ref'
+    references_df['SR_ref'] = references_df.apply(
+        lambda row: f"{row['authors'].split(';')[0] if isinstance(row['authors'], str) and ';' in row['authors'] else row['authors']}, {row['year']}, {row['source_title']}",
+        axis=1
+    )
+    
+    # Mapear 'source_title' desde scopus_df
+    references_df['source_title_mainarticle'] = references_df['SR'].map(
+        scopus_df.set_index('SR')['source_title'].to_dict()
+    )
+    
+    # Definir el orden de las columnas
+    column_order = ['SR', 'SR_ref', 'title', 'authors', 'source_title', 'source_title_mainarticle', 
+                   'year', 'volume', 'pages', 'doi', 'CR_ref']
+    
+    # Asegurarse de que todas las columnas existen
+    for col in column_order:
+        if col not in references_df.columns:
+            references_df[col] = '-'
+    
+    # Devolver el DataFrame ordenado
+    return references_df[column_order]
+
+def _create_sr_column(df):
+    """
+    Crea la columna SR (Source Reference) con formato "Primer_Autor, año, revista"
+    """
+    def make_sr(row):
+        author = row.get('author', '')
+        year = row.get('year', '')
+        journal = row.get('source_title', '')
+        
+        # Extraer primer autor
+        first_author = author.split(';')[0] if isinstance(author, str) and ';' in author else author
+        
+        return f"{first_author}, {year}, {journal}"
+    
+    df['SR'] = df.apply(make_sr, axis=1)
+    return df
+
+def _parse_reference(reference):
+    """
+    Analiza una referencia individual y extrae todos sus componentes
+    
+    Parameters:
+    -----------
+    reference : str
+        Texto de una referencia bibliográfica
+        
+    Returns:
+    --------
+    dict
+        Diccionario con los componentes extraídos o None si no se pudo procesar
+    """
+    # Extraer autores
+    authors, remaining = _extract_authors(reference)
+    if not authors:
+        return None
+    
+    # Extraer DOI si existe
+    doi, remaining = _extract_doi(remaining)
+    
+    # Extraer el año
+    year, remaining = _extract_year(remaining)
+    
+    # Extraer título, revista, volumen y páginas
+    title, journal, volume, pages = _extract_title_journal_volume_pages(remaining)
+    if not title:
+        return None
+    
+    return {
+        'authors': authors,
+        'title': title,
+        'source_title': journal,
+        'year': year,
+        'volume': volume,
+        'pages': pages,
+        'doi': doi
+    }
+
+def _extract_authors(reference):
+    """
+    Extrae los autores de una referencia bibliográfica.
+    
+    Parameters:
+    -----------
+    reference : str
+        Texto de referencia con formato: "AUTOR1, AUTOR2, ..., TÍTULO, REVISTA, ..."
+        
+    Returns:
+    --------
+    tuple
+        - authors_str: String con autores separados por ';'
+        - remaining: Texto restante después de los autores
+    """
+    # Dividir por comas
+    parts = [p.strip() for p in reference.split(',')]
+    if not parts:
+        return '', reference
+    
+    authors = []
+    title_index = None
+    
+    # Patrón para detectar un autor: APELLIDO seguido de INICIALES
+    author_pattern = r'^[A-Z][A-Za-z\'\-]+\s+(?:[A-Z]\.?)+$'
+    
+    # Examinar cada parte para determinar si es un autor
+    for i, part in enumerate(parts):
+        if re.match(author_pattern, part):
+            authors.append(part)
         else:
+            # Si no parece un autor, hemos llegado al título
+            title_index = i
             break
-    remaining_text = ', '.join(tokens[i:])
-    return ';'.join(author_list), remaining_text
+    
+    # Si no se detectaron autores, usar el primer elemento como autor por defecto
+    if not authors and parts:
+        authors = [parts[0]]
+        title_index = 1
+    
+    # Si todos parecen autores (poco probable), usar el último como título
+    if title_index is None:
+        title_index = len(authors)
+        authors = authors[:-1]
+    
+    # Unir autores con punto y coma
+    authors_str = ';'.join(authors)
+    
+    # Reconstruir el texto restante
+    remaining = ', '.join(parts[title_index:])
+    
+    return authors_str, remaining
 
-def extract_doi(text):
+def _extract_doi(text):
     """
-    Extracts the DOI from the text if present and decodes URL-encoded characters.
-
+    Extrae el DOI del texto si está presente
+    
     Parameters:
-    ----------
+    -----------
     text : str
-        The text from which to extract the DOI.
-
+        Texto de la referencia
+        
     Returns:
-    -------
+    --------
     tuple
-        - doi: The extracted and decoded DOI or empty string if not found.
-        - text: The text after removing the DOI.
+        - doi: DOI extraído o cadena vacía
+        - text: Texto sin el DOI
     """
-    # Search for 'DOI:' followed by '10.' and non-whitespace characters
+    # Buscar "DOI:" seguido por "10." y caracteres
     doi_match = re.search(r'DOI:\s*(10\.\S+)', text, flags=re.IGNORECASE)
     if doi_match:
         doi = doi_match.group(1)
-        # Remove the DOI from the text
         text = text.replace(doi_match.group(0), '')
     else:
-        # Alternatively, search for '10.' directly
+        # Alternativamente, buscar "10." directamente
         doi_match = re.search(r'(10\.\S+)', text)
         if doi_match:
             doi = doi_match.group(1)
-            # Remove the DOI from the text
             text = text.replace(doi, '')
         else:
             doi = ''
-    # Decode URL-encoded characters in the DOI
+    
+    # Decodificar caracteres URL-encoded
     doi = urllib.parse.unquote(doi)
-    # Remove any trailing commas or periods from the DOI
+    # Eliminar comas o puntos al final
     doi = doi.rstrip('.,')
     text = text.strip(' ,.')
+    
     return doi, text
 
-def clean_remaining_text(text):
+def _extract_year(text):
     """
-    Cleans the remaining text by removing URLs and unnecessary punctuation.
-
+    Extrae el año de publicación, asumiendo que está entre paréntesis
+    
     Parameters:
-    ----------
+    -----------
     text : str
-        The text to be cleaned.
-
+        Texto de la referencia
+        
     Returns:
-    -------
-    str
-        The cleaned text.
-    """
-    # Remove URLs
-    text = re.sub(r'https?://\S+', '', text, flags=re.IGNORECASE)
-    # Remove multiple commas and spaces
-    text = re.sub(r',\s*,', ',', text)
-    text = re.sub(r'\s+', ' ', text)
-    text = text.strip(' ,.')
-    return text
-
-def extract_year(text):
-    """
-    Extracts the publication year from the text.
-
-    Parameters:
-    ----------
-    text : str
-        The text from which to extract the year.
-
-    Returns:
-    -------
+    --------
     tuple
-        - year: The publication year as a string.
-        - text_before_year: Text before the year.
-        - text_after_year: Text after the year.
+        - year: Año extraído o cadena vacía
+        - text: Texto sin el año
     """
+    # Buscar año en paréntesis, típicamente al final
     year_match = re.search(r'\((\d{4})\)', text)
     if year_match:
         year = year_match.group(1)
-        text_before_year = text[:year_match.start()].strip(' ,.')
-        text_after_year = text[year_match.end():].strip(' ,.')
+        # Eliminar el año con paréntesis del texto
+        text = text.replace(year_match.group(0), '').strip(' ,.')
     else:
-        year = ''
-        text_before_year = text.strip(' ,.')
-        text_after_year = ''
-    return year, text_before_year, text_after_year
+        # Si no hay paréntesis, buscar un año de 4 dígitos
+        year_match = re.search(r'\b(\d{4})\b', text)
+        if year_match:
+            year = year_match.group(1)
+            # Confirmar que es un año válido (entre 1800 y 2030)
+            if 1800 <= int(year) <= 2030:
+                text = text.replace(year, '').strip(' ,.')
+            else:
+                year = ''
+        else:
+            year = ''
+    
+    return year, text
 
-def extract_title_and_journal(text_before_year, text_after_year):
+def _extract_title_journal_volume_pages(text):
     """
-    Extracts the title and journal name from the text.
-
-    Parameters:
-    ----------
-    text_before_year : str
-        Text before the publication year.
-    text_after_year : str
-        Text after the publication year.
-
-    Returns:
-    -------
-    tuple
-        - title: The extracted title.
-        - journal: The extracted journal name.
-    """
-    # Clean text_after_year
-    text_after_year = clean_remaining_text(text_after_year)
-    # Remove volume/issue/page information from text_after_year
-    text_after_year_cleaned = re.sub(r'(\b\d+\b\s*\([^)]+\)\s*,?\s*)?|PP?\.\s*\d+.*$', '', text_after_year, flags=re.IGNORECASE).strip(' ,.')
-
-    if text_before_year:
-        title = text_before_year.strip(' ,.')
-    else:
-        # If text_before_year is empty, use text_after_year as title
-        title = text_after_year_cleaned
-        text_after_year_cleaned = ''
-
-    journal = ''
-    if text_after_year_cleaned:
-        # Split text_after_year by commas
-        parts = [part.strip() for part in text_after_year_cleaned.split(',') if part.strip()]
-        if parts:
-            # Assume first part is journal name
-            journal = parts[0]
-
-    # Clean the title and journal
-    title = clean_title(title)
-    journal = clean_journal(journal)
-
-    return title, journal
-
-def clean_title(title):
-    """
-    Cleans the title by removing unwanted trailing information.
-
-    Parameters:
-    ----------
-    title : str
-        The title to be cleaned.
-
-    Returns:
-    -------
-    str
-        The cleaned title.
-    """
-    patterns = [
-        r'PP\..*', r'P\..*', r'DOI:.*', r'https?://.*',
-        r'VOL\..*', r'NO\..*', r'ISSUE.*', r'\b\d+\b\s*\([^)]+\)'
-    ]
-    for pattern in patterns:
-        title = re.sub(pattern, '', title, flags=re.IGNORECASE)
-    title = title.strip(' ,.')
-    return title
-
-def clean_journal(journal):
-    """
-    Cleans the journal name by removing volume, issue, and page numbers,
-    and removes dots from the journal name.
-
-    Parameters:
-    ----------
-    journal : str
-        The journal name to be cleaned.
-
-    Returns:
-    -------
-    str
-        The cleaned journal name.
-    """
-    patterns = [
-        r'\b\d+\b\s*\([^)]+\)', r'\b\d+\b', r'\(.*?\)', r'PP\..*', r'P\..*',
-        r'VOL\..*', r'NO\..*', r'ISSUE.*', r'\d+.*$'
-    ]
-    for pattern in patterns:
-        journal = re.sub(pattern, '', journal, flags=re.IGNORECASE)
-    # Remove dots from the journal name
-    journal = journal.replace('.', '')
-    journal = journal.strip(' ,.')
-    return journal
-
-def create_SR_column(scopus_df, author_col, year_col, journal_col):
-    """
-    Creates a new column 'SR' in the dataframe with format 'First_Author, year, journal'.
+    Extrae título, revista, volumen y páginas del texto restante
     
     Parameters:
-    ----------
-    df : pandas.DataFrame
-        The dataframe to modify.
-    author_col : str
-        Name of the column containing authors (separated by ';').
-    year_col : str
-        Name of the column containing publication year.
-    journal_col : str
-        Name of the column containing journal name.
+    -----------
+    text : str
+        Texto después de extraer autores, DOI y año
         
     Returns:
-    -------
-    pandas.DataFrame
-        The dataframe with the new 'SR' column.
+    --------
+    tuple
+        - title: Título del artículo
+        - journal: Nombre de la revista
+        - volume: Volumen de la revista
+        - pages: Páginas del artículo
     """
-    # Crear una función auxiliar que procesará cada fila
-    def create_SR_ref(row):
-        author = row[author_col]
-        year = row[year_col]
-        journal = row[journal_col]
-        # Extraer el primer autor
-        first_author = author.split(';')[0] if isinstance(author, str) and ';' in author else author
-        return f"{first_author}, {year}, {journal}"
+    # Valores por defecto
+    title = ''
+    journal = ''
+    volume = ''
+    pages = ''
     
-    # Aplicar la función a cada fila del DataFrame
-    scopus_df['SR'] = scopus_df.apply(create_SR_ref, axis=1)
+    # Si no hay suficiente texto, retornar valores vacíos
+    if not text:
+        return title, journal, volume, pages
     
-    return scopus_df
+    # Buscar patrones comunes de revistas científicas (abreviaciones típicas seguidas de comas y números)
+    # Por ejemplo: "J FOOD PROT, 68, PP. 2264-2268"
+    journal_match = re.search(r',\s*([A-Z][A-Z\s]+(?:AND|&)?[A-Z\s]*),\s*(\d+),\s*(?:PP\.|P\.)?\s*(\d+(?:-\d+)?)', text)
+    
+    if journal_match:
+        # Extraer journal, volume y pages
+        journal = journal_match.group(1).strip()
+        volume = journal_match.group(2).strip()
+        pages = journal_match.group(3).strip()
+        
+        # El título es todo lo que viene antes del journal
+        title_end_pos = journal_match.start()
+        title = text[:title_end_pos].strip(' ,.:;-')
+    else:
+        # Si no se puede encontrar el patrón de revista, intentar un enfoque más simple
+        parts = [p.strip() for p in text.split(',')]
+        
+        # Si no hay suficientes partes, retornar lo que se pueda
+        if not parts:
+            return title, journal, volume, pages
+        
+        # Buscar patrones típicos de volumen y páginas
+        vol_page_indices = []
+        for i, part in enumerate(parts):
+            # Buscar partes que parecen ser volumen (solo números)
+            if re.match(r'^\d+$', part.strip()):
+                vol_page_indices.append(i)
+            # Buscar partes que parecen ser páginas
+            elif re.search(r'PP\.|P\.', part, re.IGNORECASE) or re.match(r'^\d+-\d+$', part.strip()):
+                vol_page_indices.append(i)
+        
+        if vol_page_indices:
+            # El journal es la parte justo antes del primer volumen/páginas
+            journal_index = vol_page_indices[0] - 1
+            if journal_index >= 0:
+                journal = parts[journal_index]
+                # El título es todo lo anterior al journal
+                title = ', '.join(parts[:journal_index])
+                
+                # Procesar volumen y páginas
+                for i in vol_page_indices:
+                    part = parts[i].strip()
+                    if re.match(r'^\d+$', part):
+                        volume = part
+                    elif re.search(r'PP\.|P\.', part, re.IGNORECASE):
+                        pages = re.sub(r'PP\.|P\.', '', part, flags=re.IGNORECASE).strip()
+                    elif re.match(r'^\d+-\d+$', part):
+                        pages = part
+            else:
+                # Si no se encontró un journal, usar el esquema por defecto
+                title = parts[0]
+                if len(parts) > 1:
+                    journal = parts[1]
+        else:
+            # Si no se encontraron patrones de volumen/páginas
+            # Asumir que el título es el primer elemento y el journal el segundo
+            title = parts[0]
+            if len(parts) > 1:
+                journal = parts[1]
+    
+    # Limpiar título y revista
+    title = _clean_text(title)
+    journal = _clean_text(journal)
+    journal = journal.replace('.', '')
+    
+    return title, journal, volume, pages
 
-def get_scopus_references(scopus_df):
+def _clean_text(text):
     """
-    Processes the Scopus DataFrame to extract author, titles, years, journals, and DOIs,
-    removes dots from journal names, creates SR_ref, and rearranges columns.
-
-    Parameters:
-    ----------
-    scopus_df : pd.DataFrame
-        A DataFrame containing at least the columns 'SR' and 'references'.
-
-    Returns:
-    -------
-    pd.DataFrame
-        A DataFrame with columns 'SR', 'SR_ref', 'title', 'author', 'journal', 'year', 'doi', 'CR_ref'.
+    Limpia el texto eliminando caracteres innecesarios
     """
-    scopus_df['source_title'] = scopus_df['abbreviated_source_title'].str.replace('.', '', regex=False)
-    scopus_df = create_SR_column(scopus_df, author_col='author', year_col='year', journal_col='source_title')
-    scopus_df_copy = scopus_df[['SR', 'references']].copy()
-    extracted_refs = []
+    # Eliminar múltiples espacios
+    text = re.sub(r'\s+', ' ', text)
+    # Eliminar puntuación al inicio y final
+    text = text.strip(' ,.:;-')
+    return text
 
-    for idx, row in scopus_df_copy.iterrows():
-        sr_value = row['SR']
-        cr_value = row['references']
-        references = re.split(r';\s*', str(cr_value))
-
-        for ref in references:
-            original_ref = ref.strip()
-            if original_ref:
-                # Extract author and remaining text
-                author, remaining_text = extract_authors(original_ref)
-                if not author:
-                    continue  # Skip entries without author
-
-                # Extract DOI
-                doi, remaining_text = extract_doi(remaining_text)
-
-                # Clean remaining text
-                remaining_text = clean_remaining_text(remaining_text)
-
-                # Extract publication year
-                year, text_before_year, text_after_year = extract_year(remaining_text)
-
-                # Extract title and journal
-                title, journal = extract_title_and_journal(text_before_year, text_after_year)
-
-                if not title:
-                    continue  # Skip entries without title
-
-                extracted_refs.append({
-                    'SR': sr_value,
-                    'CR_ref': original_ref,
-                    'authors': author,
-                    'title': title,
-                    'journal': journal if journal else '-',
-                    'year': year,
-                    'doi': doi
-                })
-
-    references_df = pd.DataFrame(extracted_refs)
-
-    # Remove dots from 'journal' column
-    references_df['journal'] = references_df['journal'].str.replace('.', '', regex=False)
-
-    # Create 'SR_ref' column as 'First_Author, year, journal'
-    references_df['SR_ref'] = references_df.apply(
-        lambda row: f"{row['authors'].split(';')[0]}, {row['year']}, {row['journal']}",
-        axis=1
-    )
-
-
-    # Create 'source_title' in references_df
-    references_df['source_title'] = scopus_df['source_title']
+# Ejemplo de uso
+# if __name__ == "__main__":
+#     # Ejemplo con una lista de referencias
+#     data = {
+#         'author': ['Smith J', 'Johnson K'],
+#         'year': [2020, 2019],
+#         'abbreviated_source_title': ['J. Sci.', 'Nature'],
+#         'references': [
+#             "ARTHUR T.M., BONO J.L., KALCHAYANAND N., CHARACTERIZATION OF ESCHERICHIA COLI O157:H7 STRAINS FROM CONTAMINATED RAW BEEF TRIM DURING HIGH EVENT PERIODS, APPL ENVIRON MICROBIOL, 80, PP. 506-514, (2014)",
+#             "CALLAWAY T.R., ANDERSON R.C., EDRINGTON T.S., GENOVESE K.J., BISCHOFF K.M., POOLE T.L., JUNG Y.S., HARVEY R.B., NISBET D.J., WHAT ARE WE DOING ABOUT ESCHERICHIA COLI O157: H7 IN CATTLE, J ANIM SCI, 82, E, PP. E93-E99, (2004)"
+#         ]
+#     }
     
-    # Rearrange columns to the desired order
-    desired_order = ['SR', 'SR_ref', 'title', 'authors', 'journal', 'source_title', 'year', 'doi', 'CR_ref']
-    references_df = references_df[desired_order]
-
-    return references_df, scopus_df
+#     test_df = pd.DataFrame(data)
+    
+#     # Procesar referencias
+#     references_df = process_scopus_references(test_df)
+#     print(references_df.head())
