@@ -1,85 +1,126 @@
 import pandas as pd
+import numpy as np
 
 def enrich_wos_journals(wos_df_4, scimago):
     """
-    1) First merge:
-       - Remove dots from 'source_title' in wos_df_4 and 'journal_abbr' in scimago.
-       - Match wos_df_4['source_title_no_dots','year'] 
-         with scimago['journal_abbr_no_dots','PY'].
-       - Left-merge so all rows from wos_df_4 remain.
+    Enriches wos_df_4 with three columns from scimago: 'SJR', 'quartile', 'h_index'.
 
-    2) Second merge (for missing categoria only):
-       - Merge on wos_df_4['journal','year'] and scimago['journal','PY'] 
-         where wos_df_4['categoria'] is still NaN.
+    This version uses dictionary-based lookups to avoid memory-heavy merges:
+      1) Match by ISSN (no dashes) 
+      2) Match by wos_df_4['journal'] => scimago['journal_abbr']
+      3) Match by wos_df_4['source_title'] => scimago['journal_abbr']
 
-    Returns
-    -------
-    pd.DataFrame : Merged DataFrame with the same rows as wos_df_4 plus the column 'categoria'.
+    In each pass, only rows missing SJR/quartile/h_index are updated.
+    It is robust to TypeErrors from incomplete or missing dictionary keys.
     """
 
-    # -----------------------------
-    # STEP 1: First merge by abbreviations
-    # -----------------------------
-    # Create helper columns (remove dots, uppercase)
+    df = wos_df_4.copy()
+
+    # ------------------------------------------------------------------
+    # 1) Prepare scimago columns
+    # ------------------------------------------------------------------
+    scimago = scimago.rename(columns={
+        'SJR Best Quartile': 'quartile',
+        'H index': 'h_index',
+        'Issn': 'scimago_issn'
+    })
+
+    for col in ['scimago_issn', 'SJR', 'quartile', 'h_index', 'journal_abbr']:
+        if col not in scimago.columns:
+            scimago[col] = np.nan
+
+    for col in ['SJR', 'quartile', 'h_index']:
+        if col not in df.columns:
+            df[col] = np.nan
+
+    # ------------------------------------------------------------------
+    # 2) Build dictionaries to do key -> {SJR, quartile, h_index}
+    # ------------------------------------------------------------------
+    def build_dict(df_sc, key_col):
+        sub = df_sc.dropna(subset=[key_col]).drop_duplicates(subset=[key_col])
+        sub_indexed = sub.set_index(key_col)[['SJR', 'quartile', 'h_index']]
+        return sub_indexed.to_dict(orient='index')
+
+    # (a) scimago_issn (removing dashes, uppercase)
+    scimago['issn_no_dash'] = (
+        scimago['scimago_issn'].astype(str)
+        .str.replace('-', '', regex=False)
+        .str.upper()
+        .str.strip()
+    )
+    issn_dict = build_dict(scimago, 'issn_no_dash')
+
+    # (b) scimago['journal_abbr'], removing dots, uppercase
     scimago['journal_abbr_no_dots'] = (
-        scimago['journal_abbr']
-        .astype(str)                  # ensure string type
+        scimago['journal_abbr'].astype(str)
         .str.replace('.', '', regex=False)
         .str.upper()
         .str.strip()
     )
-    wos_df_4['source_title_no_dots'] = (
-        wos_df_4['source_title']
-        .astype(str)
+    abbr_dict = build_dict(scimago, 'journal_abbr_no_dots')
+
+    # ------------------------------------------------------------------
+    # 3) fill_from_dict helper
+    # ------------------------------------------------------------------
+    def fill_from_dict(df_w, map_dict, key_col, fill_cols=('SJR','quartile','h_index')):
+        """
+        For each row where SJR/quartile/h_index is missing,
+        look up dictionary[ row[key_col] ] -> { 'SJR':..., 'quartile':..., 'h_index':... }
+        and fill those columns if present.
+        """
+        fill_mask = df_w['SJR'].isna() | df_w['quartile'].isna() | df_w['h_index'].isna()
+        fill_info = df_w.loc[fill_mask, key_col].map(map_dict)
+
+        for col in fill_cols:
+            # For rows in fill_mask, fill from fill_info
+            # Only if fill_info is a dict and fill_info[col] is not null
+            new_values = fill_info.apply(
+                lambda record: record.get(col, np.nan)
+                if isinstance(record, dict) and pd.notna(record.get(col))
+                else np.nan
+            )
+            df_w.loc[fill_mask, col] = df_w.loc[fill_mask, col].fillna(new_values)
+
+        return df_w
+
+    # ------------------------------------------------------------------
+    # 4) PASS 1: fill by ISSN
+    # ------------------------------------------------------------------
+    def pick_issn_no_dash(row):
+        val = row['issn'] if pd.notna(row['issn']) else row['eissn']
+        return str(val).replace('-', '').upper().strip() if pd.notna(val) else ''
+
+    df['issn_no_dash'] = df.apply(pick_issn_no_dash, axis=1)
+    df = fill_from_dict(df, issn_dict, 'issn_no_dash')
+
+    # ------------------------------------------------------------------
+    # 5) PASS 2: fill by journal vs. journal_abbr
+    # ------------------------------------------------------------------
+    df['journal_no_dots'] = (
+        df['journal'].astype(str)
         .str.replace('.', '', regex=False)
         .str.upper()
         .str.strip()
     )
+    df = fill_from_dict(df, abbr_dict, 'journal_no_dots')
 
-    # Perform the left merge on abbreviations
-    merged_df = wos_df_4.merge(
-        scimago[['journal_abbr_no_dots', 'PY', 'categoria']],
-        how='left',
-        left_on=['source_title_no_dots', 'year'],
-        right_on=['journal_abbr_no_dots', 'PY']
+    # ------------------------------------------------------------------
+    # 6) PASS 3: fill by source_title vs. journal_abbr
+    # ------------------------------------------------------------------
+    df['source_title_no_dots'] = (
+        df['source_title'].astype(str)
+        .str.replace('.', '', regex=False)
+        .str.upper()
+        .str.strip()
     )
+    df = fill_from_dict(df, abbr_dict, 'source_title_no_dots')
 
-    # Remove temporary columns from Step 1
-    merged_df.drop(
-        columns=['journal_abbr_no_dots', 'source_title_no_dots', 'PY'],
-        inplace=True
-    )
+    # ------------------------------------------------------------------
+    # Cleanup
+    # ------------------------------------------------------------------
+    df.drop(columns=['issn_no_dash', 'journal_no_dots', 'source_title_no_dots'],
+            inplace=True, errors='ignore')
+    scimago.drop(columns=['issn_no_dash','journal_abbr_no_dots'],
+                 inplace=True, errors='ignore')
 
-    # -----------------------------
-    # STEP 2: Second merge by full journal name for rows still missing categoria
-    # -----------------------------
-    # 2a. Separate rows that have not matched a categoria
-    missing_cat_mask = merged_df['categoria'].isna()
-    missing_df = merged_df.loc[missing_cat_mask].copy()
-    non_missing_df = merged_df.loc[~missing_cat_mask].copy()
-
-    # 2b. Merge missing rows with scimago by 'journal' and 'PY' vs. 'year'
-    #     (Note: scimago's full title is also called 'journal')
-    updated_missing_df = missing_df.merge(
-        scimago[['journal', 'PY', 'categoria']],
-        how='left',
-        left_on=['journal', 'year'],
-        right_on=['journal', 'PY'],
-        suffixes=('', '_scimago_journal')
-    )
-
-    # 2c. Fill any missing 'categoria' from this second match
-    #     If we still don't get a match, it remains NaN.
-    updated_missing_df['categoria'] = updated_missing_df['categoria'].fillna(
-        updated_missing_df['categoria_scimago_journal']
-    )
-
-    # Optionally drop 'journal'/'PY' from scimago if you don't need them
-    updated_missing_df.drop(columns=['PY', 'categoria_scimago_journal'], inplace=True)
-
-    # -----------------------------
-    # STEP 3: Concatenate updated missing rows with non-missing
-    # -----------------------------
-    final_df = pd.concat([non_missing_df, updated_missing_df], ignore_index=True)
-
-    return final_df
+    return df

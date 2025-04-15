@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 def fix_missing_journal_references(wos_df_3):
     """
@@ -6,76 +7,71 @@ def fix_missing_journal_references(wos_df_3):
     and unify/fill the 'journal' column using the most frequent 'journal'
     expansion (with length as a tiebreaker).
     
-    Parameters
-    ----------
-    wos_df_3 : pd.DataFrame
-        The dataframe that contains columns 'ismainarticle', 'source_title', and 'journal'.
-        
-    Returns
-    -------
-    pd.DataFrame
-        A copy of wos_df_3 with updated 'journal' values in reference rows.
+    In the end, returns a dataframe with these columns (in this order):
+        SR
+        journal
+        source_title
+        journal_abbreviation
+        issn
+        eissn
+        publisher
+        publisher_address
+        volume
+        issue
+        publication_date
+        part_number
+        special_issue
+        supplement
     """
-    # 1) Make a copy if we don't want to mutate the original
     df = wos_df_3.copy()
 
-    # 2) Extract only the reference rows
+    # 1) Identify reference rows
     ref_mask = (df['ismainarticle'] == False)
+    # 2) Extract the relevant columns for reference rows
     refs = df.loc[ref_mask, ['source_title', 'journal']].copy()
 
-    # 3) Define helper function to pick a single expansion from a group
+    # 3) Helper function to pick a single expansion from a group
     def pick_expansion(series: pd.Series) -> str:
-        """
-        Among all non-empty expansions in 'series', pick the best one:
-          - The one that occurs most often (highest frequency),
-          - If there is a tie on frequency, pick the one with the greatest length.
-        If series is entirely missing, returns an empty string or NaN (your choice).
-        """
         # Drop empty or fully missing expansions
         valid = series.dropna().replace('', float('nan')).dropna()
         if len(valid) == 0:
-            return ''  # or return float('nan') if you prefer
-        freq = valid.value_counts()
-        freq_df = freq.reset_index()
-        freq_df.columns = ['candidate_journal', 'count']
-        # measure string length
-        freq_df['length'] = freq_df['candidate_journal'].str.len()
-        # sort by frequency desc, then length desc
-        freq_df = freq_df.sort_values(by=['count', 'length'], ascending=[False, False])
-        # top candidate
-        best_journal = freq_df.iloc[0]['candidate_journal']
-        return best_journal
+            return ''
+        freq = valid.value_counts().reset_index()
+        freq.columns = ['candidate_journal', 'count']
+        freq['length'] = freq['candidate_journal'].str.len()
+        # Sort by frequency desc, then length desc
+        freq = freq.sort_values(by=['count', 'length'], ascending=[False, False])
+        return freq.iloc[0]['candidate_journal']
 
-    # 4) Group by source_title → transform 'journal' via our pick_expansion logic
+    # 4) Generate unified journal names
     chosen_expansions = (
         refs.groupby('source_title')['journal']
             .transform(pick_expansion)
     )
-    # 'chosen_expansions' is a series aligned with refs, containing the chosen fill
 
-    # 5) Overwrite the old 'journal' in the reference subset with the new unified values
+    # 5) Overwrite in the original df only for reference rows
     df.loc[ref_mask, 'journal'] = chosen_expansions
-    if 'journal_abbreviation' in df.columns:
-        df = df[['SR', 'issn', 'source_title', 'journal_abbreviation', 'journal']]
-    else:
-        df = df[['SR', 'issn', 'source_title','abbreviated_source_title', 'journal']]
 
-    # Return the updated dataframe
-    return df
+    # 6) Ensure required columns exist
+    final_columns = [
+        'SR',
+        'journal',
+        'source_title',
+        'journal_abbreviation',
+        'issn',
+        'eissn',
+        'publisher',
+        'publisher_address',
+        'volume',
+        'issue',
+        'publication_date',
+        'part_number',
+        'special_issue',
+        'supplement'
+    ]
+    for col in final_columns:
+        if col not in df.columns:
+            df[col] = np.nan  # or '' if you prefer empty strings
 
-
-# ------------------------------------------------------------------------
-# Example usage (uncomment if you want to test):
-#
-# data = {
-#     'ismainarticle': [False, False, False, True],
-#     'source_title': ['J CONSUM RES', 'J CONSUM RES', 'J CONSUM SCI', 'NONREFERENCE'],
-#     'journal': [None, 'JOURNAL OF CONSUMER RESEARCH', '', 'NOT USED'],
-# }
-# wos_df_3 = pd.DataFrame(data)
-# print("Before:")
-# print(wos_df_3)
-#
-# updated = fix_missing_journal_references(wos_df_3)
-# print("\nAfter:")
-# print(updated)
+    # 7) Return only the requested columns in the specified order
+    return df[final_columns]
