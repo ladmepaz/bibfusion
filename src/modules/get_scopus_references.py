@@ -283,97 +283,58 @@ def _extract_year(text):
 
 def _extract_title_journal_volume_pages(text):
     """
-    Extrae título, revista, volumen y páginas del texto restante
-    
-    Parameters:
-    -----------
-    text : str
-        Texto después de extraer autores, DOI y año
-        
-    Returns:
-    --------
-    tuple
-        - title: Título del artículo
-        - journal: Nombre de la revista
-        - volume: Volumen de la revista
-        - pages: Páginas del artículo
+    Extrae título, revista, volumen y páginas de una referencia bibliográfica.
+    Excluye nombres de países del campo journal.
     """
-    # Valores por defecto
-    title = ''
-    journal = ''
-    volume = ''
-    pages = ''
+    # 1. Eliminar año
+    text = re.sub(r'\(\d{4}\)', '', text).strip().rstrip(',')
+
+    # 2. Extraer páginas
+    pages = ""
+    match_pages = re.search(r'PP\.\s*([\d\-–]+)', text)
+    if match_pages:
+        pages = match_pages.group(1).strip()
+        text = text.replace(match_pages.group(0), '').strip().rstrip(',')
+
+    # 3. Separar por comas
+    components = [comp.strip() for comp in text.split(',') if comp.strip()]
+
+    # 4. Buscar volumen/número desde el final
     
-    # Si no hay suficiente texto, retornar valores vacíos
-    if not text:
-        return title, journal, volume, pages
-    
-    # Buscar patrones comunes de revistas científicas (abreviaciones típicas seguidas de comas y números)
-    # Por ejemplo: "J FOOD PROT, 68, PP. 2264-2268"
-    journal_match = re.search(r',\s*([A-Z][A-Z\s]+(?:AND|&)?[A-Z\s]*),\s*(\d+),\s*(?:PP\.|P\.)?\s*(\d+(?:-\d+)?)', text)
-    
-    if journal_match:
-        # Extraer journal, volume y pages
-        journal = journal_match.group(1).strip()
-        volume = journal_match.group(2).strip()
-        pages = journal_match.group(3).strip()
-        
-        # El título es todo lo que viene antes del journal
-        title_end_pos = journal_match.start()
-        title = text[:title_end_pos].strip(' ,.:;-')
-    else:
-        # Si no se puede encontrar el patrón de revista, intentar un enfoque más simple
-        parts = [p.strip() for p in text.split(',')]
-        
-        # Si no hay suficientes partes, retornar lo que se pueda
-        if not parts:
-            return title, journal, volume, pages
-        
-        # Buscar patrones típicos de volumen y páginas
-        vol_page_indices = []
-        for i, part in enumerate(parts):
-            # Buscar partes que parecen ser volumen (solo números)
-            if re.match(r'^\d+$', part.strip()):
-                vol_page_indices.append(i)
-            # Buscar partes que parecen ser páginas
-            elif re.search(r'PP\.|P\.', part, re.IGNORECASE) or re.match(r'^\d+-\d+$', part.strip()):
-                vol_page_indices.append(i)
-        
-        if vol_page_indices:
-            # El journal es la parte justo antes del primer volumen/páginas
-            journal_index = vol_page_indices[0] - 1
-            if journal_index >= 0:
-                journal = parts[journal_index]
-                # El título es todo lo anterior al journal
-                title = ', '.join(parts[:journal_index])
-                
-                # Procesar volumen y páginas
-                for i in vol_page_indices:
-                    part = parts[i].strip()
-                    if re.match(r'^\d+$', part):
-                        volume = part
-                    elif re.search(r'PP\.|P\.', part, re.IGNORECASE):
-                        pages = re.sub(r'PP\.|P\.', '', part, flags=re.IGNORECASE).strip()
-                    elif re.match(r'^\d+-\d+$', part):
-                        pages = part
-            else:
-                # Si no se encontró un journal, usar el esquema por defecto
-                title = parts[0]
-                if len(parts) > 1:
-                    journal = parts[1]
+    # Carga del CSV con separador ;
+    paises_df = pd.read_csv(r"tests\files\country.csv", sep=';', header=None, names=["codigo", "pais"])
+
+    # Convertimos los nombres de países a mayúsculas para facilitar la comparación
+    lista_paises = set(paises_df["pais"].str.upper().str.strip())
+
+    volume = ""
+    i = len(components) - 1
+    while i >= 0:
+        comp = components[i]
+        if re.fullmatch(r'\d+([\-–]\d+)?', comp):
+            if not volume:
+                volume = comp
+            i -= 1
+        elif comp.upper() in lista_paises:
+            i -= 1  # saltar países
         else:
-            # Si no se encontraron patrones de volumen/páginas
-            # Asumir que el título es el primer elemento y el journal el segundo
-            title = parts[0]
-            if len(parts) > 1:
-                journal = parts[1]
-    
-    # Limpiar título y revista
-    title = _clean_text(title)
-    journal = _clean_text(journal)
-    journal = journal.replace('.', '')
-    
-    return title, journal, volume, pages
+            break
+
+    # 5. Journal
+    journal = ""
+    if i >= 0:
+        journal = components[i]
+        i -= 1
+
+    # 6. Título (lo que queda antes del journal)
+    title_parts = components[:i+1]
+    title_parts = [part for part in title_parts if part.isupper() or ':' in part]
+    title = ', '.join(title_parts).strip()
+
+    return title, journal.strip(), volume.strip(), pages.strip()
+
+
+
 
 def _clean_text(text):
     """
