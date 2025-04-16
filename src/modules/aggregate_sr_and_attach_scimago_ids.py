@@ -2,11 +2,11 @@ import pandas as pd
 
 def aggregate_sr_and_attach_scimago_ids(wos_df, scimago):
     """
-    1) Collapse all SR values per unique (journal, source_title, issn, eissn)
-       grouping, joining them with "; ".
+    1) Collapse all SR values per unique (journal, source_title, issn, eissn) grouping, joining them with "; ".
     2) Left‑join Sourceid from scimago on wos_df.source_title == scimago.journal_abbr.
     3) Fill any remaining missing Sourceid by matching wos_df.journal == scimago.Title.
     4) Fill still-missing Sourceid by matching wos_df.issn == scimago.Issn.
+    5) Assign sequential integers (1..n) to any rows still missing Sourceid.
     
     Parameters
     ----------
@@ -67,5 +67,15 @@ def aggregate_sr_and_attach_scimago_ids(wos_df, scimago):
         )
         merged.loc[mask, 'Sourceid'] = merged.loc[mask, 'issn'].map(issn_map)
     
-    # 6) final reorder
+    # 6) fill any remaining missing Sourceid with sequential integers
+    mask = merged['Sourceid'].isna()
+    n_missing = mask.sum()
+    if n_missing > 0:
+        # assign 1..n_missing to the missing rows
+        merged.loc[mask, 'Sourceid'] = pd.Series(
+            range(1, n_missing + 1),
+            index=merged.index[mask]
+        ).astype(int)
+    
+    # 7) final reorder & return
     return merged[['SR','journal','source_title','issn','eissn','Sourceid']]
