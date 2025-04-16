@@ -10,15 +10,11 @@ def fix_missing_journal_references(wos_df_3):
     Additionally, removes '-' from 'issn' and 'eissn' columns.
     
     In the end, returns a dataframe with these columns (in this order):
-        SR
-        journal
-        source_title
-        year
-        journal_abbreviation
-        issn
-        eissn
-        publisher
-        publisher_address
+    SR
+    journal
+    source_title
+    issn
+    eissn
     """
     df = wos_df_3.copy()
 
@@ -57,15 +53,11 @@ def fix_missing_journal_references(wos_df_3):
 
     # 7) Ensure required columns exist
     final_columns = [
-        'SR',
-        'journal',
-        'source_title',
-        'year',
-        'journal_abbreviation',
-        'issn',
-        'eissn',
-        'publisher',
-        'publisher_address',
+    'SR',
+    'journal',
+    'source_title',
+    'issn',
+    'eissn'
     ]
     for col in final_columns:
         if col not in df.columns:
