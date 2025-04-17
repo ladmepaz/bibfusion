@@ -7,21 +7,14 @@ def fix_missing_journal_references(wos_df_3):
     and unify/fill the 'journal' column using the most frequent 'journal'
     expansion (with length as a tiebreaker).
     
+    Additionally, removes '-' from 'issn' and 'eissn' columns.
+    
     In the end, returns a dataframe with these columns (in this order):
-        SR
-        journal
-        source_title
-        journal_abbreviation
-        issn
-        eissn
-        publisher
-        publisher_address
-        volume
-        issue
-        publication_date
-        part_number
-        special_issue
-        supplement
+    SR
+    journal
+    source_title
+    issn
+    eissn
     """
     df = wos_df_3.copy()
 
@@ -32,7 +25,7 @@ def fix_missing_journal_references(wos_df_3):
 
     # 3) Helper function to pick a single expansion from a group
     def pick_expansion(series: pd.Series) -> str:
-        # Drop empty or fully missing expansions
+        # Drop empty or missing expansions
         valid = series.dropna().replace('', float('nan')).dropna()
         if len(valid) == 0:
             return ''
@@ -52,26 +45,23 @@ def fix_missing_journal_references(wos_df_3):
     # 5) Overwrite in the original df only for reference rows
     df.loc[ref_mask, 'journal'] = chosen_expansions
 
-    # 6) Ensure required columns exist
+    # 6) Remove '-' from 'issn' and 'eissn' columns
+    if 'issn' in df.columns:
+        df['issn'] = df['issn'].str.replace('-', '', regex=False)
+    if 'eissn' in df.columns:
+        df['eissn'] = df['eissn'].str.replace('-', '', regex=False)
+
+    # 7) Ensure required columns exist
     final_columns = [
-        'SR',
-        'journal',
-        'source_title',
-        'journal_abbreviation',
-        'issn',
-        'eissn',
-        'publisher',
-        'publisher_address',
-        'volume',
-        'issue',
-        'publication_date',
-        'part_number',
-        'special_issue',
-        'supplement'
+    'SR',
+    'journal',
+    'source_title',
+    'issn',
+    'eissn'
     ]
     for col in final_columns:
         if col not in df.columns:
             df[col] = np.nan  # or '' if you prefer empty strings
-
-    # 7) Return only the requested columns in the specified order
+    
+    # 8) Return only the requested columns in the specified order
     return df[final_columns]

@@ -1,137 +1,175 @@
 import pandas as pd
-import numpy as np
 
 def enrich_wos_journals(wos_df_4, scimago):
     """
-    Enriches wos_df_4 with three columns from scimago: 'SJR', 'quartile', 'h_index'.
-    Also creates a new 'journal_id' column (progressive from 1..n), placed first, 
-    and moves 'SR' to the end of the DataFrame.
+    Enriches wos_df_4 with the following columns from scimago:
+      'SJR',
+      'SJR Best Quartile',
+      'H index',
+      'Total Docs. (1999)',
+      'Total Docs. (3years)',
+      'Total Refs.',
+      'Total Citations (3years)',
+      'Citable Docs. (3years)',
+      'Citations / Doc. (2years)',
+      'Ref. / Doc.',
+      '%Female',
+      'Overton',
+      'SDG',
+      'Country',
+      'Region',
+      'Publisher',
+      'Coverage',
+      'Categories',
+      'Areas'
+    
+    Two-stage merge approach:
+      1) [source_title_no_dots, year] => [journal_abbr_no_dots, year]
+      2) For rows still missing these columns, [journal, year] => [journal_abbr, year]
 
-    Steps:
-      1) Prepare/rename columns in scimago.
-      2) Build dictionary-based lookups to avoid memory-heavy merges.
-      3) Fill wos_df_4's missing SJR/quartile/h_index by:
-         a) ISSN (no dashes)
-         b) 'journal' => scimago['journal_abbr']
-         c) 'source_title' => scimago['journal_abbr']
-      4) Insert 'journal_id' as first column, reorder so that 'SR' is last.
+    At the end, returns the same columns as wos_df_4 plus the new columns above.
+    The row count is the same as wos_df_4.
     """
 
+    # Copy input so we don't modify in place
     df = wos_df_4.copy()
 
-    # ------------------------------------------------------------------
-    # 1) Prepare scimago columns
-    # ------------------------------------------------------------------
-    scimago = scimago.rename(columns={
-        'SJR Best Quartile': 'quartile',
-        'H index': 'h_index',
-        'Issn': 'scimago_issn'
-    })
+    # Convert 'year' to string in both dataframes for consistent merging
+    df['year'] = df['year'].astype(str)
+    scimago['year'] = scimago['year'].astype(str)
 
-    for col in ['scimago_issn', 'SJR', 'quartile', 'h_index', 'journal_abbr']:
+    # Columns we want to bring in from scimago
+    new_cols = [
+        'SJR',
+        'SJR Best Quartile',
+        'H index',
+        'Total Docs. (1999)',
+        'Total Docs. (3years)',
+        'Total Refs.',
+        'Total Citations (3years)',
+        'Citable Docs. (3years)',
+        'Citations / Doc. (2years)',
+        'Ref. / Doc.',
+        '%Female',
+        'Overton',
+        'SDG',
+        'Country',
+        'Region',
+        'Publisher',
+        'Coverage',
+        'Categories',
+        'Areas'
+    ]
+
+    # Ensure these columns exist in scimago (set to NaN if not)
+    for col in new_cols:
         if col not in scimago.columns:
-            scimago[col] = np.nan
+            scimago[col] = pd.NA
 
-    for col in ['SJR', 'quartile', 'h_index']:
-        if col not in df.columns:
-            df[col] = np.nan
+    # Ensure scimago has 'journal_abbr_no_dots'
+    if 'journal_abbr_no_dots' not in scimago.columns:
+        # Build it from 'journal_abbr'
+        scimago['journal_abbr_no_dots'] = (
+            scimago['journal_abbr']
+            .astype(str)
+            .str.replace('.', '', regex=False)
+            .str.upper()
+            .str.strip()
+        )
+    else:
+        scimago['journal_abbr_no_dots'] = (
+            scimago['journal_abbr_no_dots']
+            .astype(str)
+            .str.upper()
+            .str.strip()
+        )
 
-    # ------------------------------------------------------------------
-    # 2) Dictionary builders
-    # ------------------------------------------------------------------
-    def build_dict(df_sc, key_col):
-        """
-        key_col -> { 'SJR': ..., 'quartile': ..., 'h_index': ... }
-        """
-        sub = df_sc.dropna(subset=[key_col]).drop_duplicates(subset=[key_col])
-        sub_indexed = sub.set_index(key_col)[['SJR', 'quartile', 'h_index']]
-        return sub_indexed.to_dict(orient='index')
+    # Drop duplicates in scimago for pass 1
+    scimago_pass1 = scimago.drop_duplicates(subset=['journal_abbr_no_dots', 'year'])
 
-    # scimago: remove dashes for ISSN
-    scimago['issn_no_dash'] = (
-        scimago['scimago_issn'].astype(str)
-        .str.replace('-', '', regex=False)
-        .str.upper()
-        .str.strip()
-    )
-    # scimago: remove dots for journal_abbr
-    scimago['journal_abbr_no_dots'] = (
-        scimago['journal_abbr'].astype(str)
-        .str.replace('.', '', regex=False)
-        .str.upper()
-        .str.strip()
-    )
-
-    # Build dictionaries
-    issn_dict = build_dict(scimago, 'issn_no_dash')
-    abbr_dict = build_dict(scimago, 'journal_abbr_no_dots')
-
-    # ------------------------------------------------------------------
-    # 3) fill_from_dict helper
-    # ------------------------------------------------------------------
-    def fill_from_dict(df_w, map_dict, key_col, fill_cols=('SJR','quartile','h_index')):
-        fill_mask = df_w['SJR'].isna() | df_w['quartile'].isna() | df_w['h_index'].isna()
-        fill_info = df_w.loc[fill_mask, key_col].map(map_dict)
-
-        for col in fill_cols:
-            new_vals = fill_info.apply(
-                lambda record: record.get(col, np.nan)
-                if isinstance(record, dict) and pd.notna(record.get(col))
-                else np.nan
-            )
-            df_w.loc[fill_mask, col] = df_w.loc[fill_mask, col].fillna(new_vals)
-        return df_w
-
-    # ------------------------------------------------------------------
-    # 4) Pass 1: fill by ISSN
-    # ------------------------------------------------------------------
-    def pick_issn_no_dash(row):
-        val = row['issn'] if pd.notna(row['issn']) else row['eissn']
-        return str(val).replace('-', '').upper().strip() if pd.notna(val) else ''
-
-    df['issn_no_dash'] = df.apply(pick_issn_no_dash, axis=1)
-    df = fill_from_dict(df, issn_dict, 'issn_no_dash')
-
-    # ------------------------------------------------------------------
-    # 5) Pass 2: fill by wos_df_4['journal'] => scimago['journal_abbr']
-    # ------------------------------------------------------------------
-    df['journal_no_dots'] = (
-        df['journal'].astype(str)
-        .str.replace('.', '', regex=False)
-        .str.upper()
-        .str.strip()
-    )
-    df = fill_from_dict(df, abbr_dict, 'journal_no_dots')
-
-    # ------------------------------------------------------------------
-    # 6) Pass 3: fill by wos_df_4['source_title'] => scimago['journal_abbr']
-    # ------------------------------------------------------------------
+    # Create 'source_title_no_dots' in wos_df_4
     df['source_title_no_dots'] = (
         df['source_title'].astype(str)
         .str.replace('.', '', regex=False)
         .str.upper()
         .str.strip()
     )
-    df = fill_from_dict(df, abbr_dict, 'source_title_no_dots')
 
-    # ------------------------------------------------------------------
-    # Cleanup
-    # ------------------------------------------------------------------
-    df.drop(columns=['issn_no_dash', 'journal_no_dots', 'source_title_no_dots'],
-            inplace=True, errors='ignore')
-    scimago.drop(columns=['issn_no_dash','journal_abbr_no_dots'],
-                 inplace=True, errors='ignore')
+    # ----------------------------------------------------------------
+    # MERGE PASS 1: [source_title_no_dots, year] => [journal_abbr_no_dots, year]
+    # ----------------------------------------------------------------
+    # We'll bring 'journal_abbr_no_dots', 'year', and all the new_cols
+    pass1_cols = ['journal_abbr_no_dots', 'year'] + new_cols
+    merged1 = df.merge(
+        scimago_pass1[pass1_cols],
+        how='left',
+        left_on=['source_title_no_dots', 'year'],
+        right_on=['journal_abbr_no_dots', 'year'],
+        validate='many_to_one',   # scimago should have 0-1 match
+        suffixes=('', '_scm')
+    )
 
-    # ------------------------------------------------------------------
-    # Insert 'journal_id' as first column, and move 'SR' to the end
-    # ------------------------------------------------------------------
-    # 1) Create progressive ID
-    df.insert(0, 'journal_id', range(1, len(df) + 1))
+    # For each new col, fill the merged1 col from _scm if needed
+    # e.g. if merged1['SJR'] is empty, fill from merged1['SJR_scm']
+    for col in new_cols:
+        if f"{col}_scm" in merged1.columns:
+            merged1[col] = merged1[col].fillna(merged1[f"{col}_scm"])
+            merged1.drop(columns=[f"{col}_scm"], inplace=True, errors='ignore')
 
-    # 2) Reorder so 'SR' is last
-    cols = list(df.columns)
-    cols.remove('SR')
-    cols.append('SR')
-    df = df[cols]
+    # Drop temporary columns from pass 1
+    merged1.drop(columns=['journal_abbr_no_dots', 'source_title_no_dots'], inplace=True, errors='ignore')
 
-    return df
+    # ----------------------------------------------------------------
+    # MERGE PASS 2: For rows still missing these columns,
+    #               [journal, year] => [journal_abbr, year]
+    # ----------------------------------------------------------------
+    # We'll define a mask for missing in ANY of the new_cols
+    # If a row is missing ANY of the new columns, we'll try pass-2 merge
+    missing_mask = False
+    for col in new_cols:
+        missing_mask = missing_mask | merged1[col].isna()
+
+    missing_df = merged1.loc[missing_mask].copy()
+    non_missing_df = merged1.loc[~missing_mask].copy()
+
+    # Build pass-2 scimago dropping duplicates on [journal_abbr, year]
+    scimago_pass2 = scimago.drop_duplicates(subset=['journal_abbr', 'year'])
+    pass2_cols = ['journal_abbr', 'year'] + new_cols
+
+    updated_missing = missing_df.merge(
+        scimago_pass2[pass2_cols],
+        how='left',
+        left_on=['journal', 'year'],
+        right_on=['journal_abbr', 'year'],
+        validate='many_to_one',
+        suffixes=('', '_scm')
+    )
+
+    # Fill from pass-2
+    for col in new_cols:
+        if f"{col}_scm" in updated_missing.columns:
+            updated_missing[col] = updated_missing[col].fillna(updated_missing[f"{col}_scm"])
+            updated_missing.drop(columns=[f"{col}_scm"], inplace=True, errors='ignore')
+
+    # Drop pass-2 merge columns
+    updated_missing.drop(columns=['journal_abbr'], inplace=True, errors='ignore')
+
+    # Combine
+    final_df = pd.concat([non_missing_df, updated_missing], ignore_index=True)
+
+    # ----------------------------------------------------------------
+    # BUILD FINAL COLUMNS: wos_df_4 + new_cols
+    # ----------------------------------------------------------------
+    original_cols = list(wos_df_4.columns)
+    extended_cols = original_cols[:]
+    for col in new_cols:
+        if col not in extended_cols:
+            extended_cols.append(col)
+
+    # Some ephemeral columns might remain, so let's keep only the columns
+    # we want: intersection of extended_cols and final_df.columns
+    final_cols = [c for c in extended_cols if c in final_df.columns]
+
+    final_df = final_df.reindex(columns=final_cols)
+
+    return final_df
