@@ -87,7 +87,7 @@ def resolve_duplicate_sourceids(
     )
 
     # build journal metadata table
-    journal = aggregated[['journal_id', 'source_title', 'journal', 'issn', 'eissn']].copy()
+    journal = aggregated[['journal_id', 'source_title', 'journal']].copy()
 
     # build scimago_raw: one row per SR
     scimago_raw = (
