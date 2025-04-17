@@ -1,146 +1,137 @@
-import pandas as pd
-import re
 import os
+import re
+import logging
+from typing import List, Tuple
 
-def fill_missing_affiliations(df):
-    """
-    Rellena los valores vacíos o espacios en blanco en la columna 'Affiliation' con 'NO AFFILIATION'.
-        
-    Parámetros:
-        df (pd.DataFrame): DataFrame con la columna 'Affiliation'.
-        
-    Retorna:
-        pd.DataFrame: DataFrame con los valores corregidos en 'Affiliation'.
-    """
-    df["Affiliation"] = df["Affiliation"].fillna("NO AFFILIATION.").replace(r"^\s*$", "NO AFFILIATION.", regex=True)
-    return df
+import pandas as pd
 
-def extract_countries(df, country_codes_file):
+# Configure module-level logger
+logger = logging.getLogger(__name__)
+
+# Constants
+AFFILIATION_PLACEHOLDER = "NO AFFILIATION"
+COUNTRY_PLACEHOLDER = "NO COUNTRY"
+# Aliases for regions to their parent country
+ALIASES = {
+    'HONG KONG': 'CHINA',
+}
+
+
+def fill_missing_affiliations(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Extrae países de la columna 'Affiliation' y crea una nueva columna 'Country'.
-    Procesa cada afiliación separada por punto y coma individualmente.
-    Coloca "NO COUNTRY" donde no se detecte ningún país.
-    
+    Fill NaN or blank Affiliations with a consistent placeholder.
+
     Args:
-        df (pandas.DataFrame): DataFrame con la columna 'Affiliation'
-        country_codes_file (str): Ruta al archivo CSV con códigos de países
-        
+        df: DataFrame containing an 'Affiliation' column.
     Returns:
-        pandas.DataFrame: DataFrame con la nueva columna 'Country'
+        DataFrame with missing or blank affiliations replaced.
     """
-    # Cargar el archivo de códigos de países
-    if os.path.exists(country_codes_file):
-        country_codes = pd.read_csv(country_codes_file, delimiter=';', header=None, names=['code', 'name'])
-        # Limpiar espacios en blanco y convertir a mayúsculas
-        country_codes['code'] = country_codes['code'].str.strip().str.upper()
-        country_codes['name'] = country_codes['name'].str.strip().str.upper()
-        
-        # Crear un diccionario para mapear códigos a nombres de países
-        code_to_name = dict(zip(country_codes['code'], country_codes['name']))
-        
-        # Crear una lista de todos los nombres de países para búsqueda
-        all_country_names = country_codes['name'].tolist()
-        all_country_codes = country_codes['code'].tolist()
-        
-        # Ordenar países por longitud (descendente) para evitar coincidencias parciales
-        all_country_names = sorted(all_country_names, key=len, reverse=True)
-        all_country_codes = sorted(all_country_codes, key=len, reverse=True)
-        
-        # Diccionario para mapear nombres a sí mismos (para normalización)
-        name_to_name = {name: name for name in all_country_names}
-        
-        # Combinar ambos diccionarios para tener un único mapeo
-        country_map = {**code_to_name, **name_to_name}
-    else:
-        print(f"El archivo {country_codes_file} no existe. No se realizará la extracción de países.")
-        return df
-    
-    # Función para extraer países de una única afiliación
-    def extract_countries_from_single_affiliation(single_affiliation):
-        if pd.isna(single_affiliation) or not single_affiliation.strip():
-            return "NO COUNTRY"
-        
-        if single_affiliation.strip().upper() == 'NO AFFILIATION':
-            return "NO COUNTRY"
-        
-        # Convertir a mayúsculas
-        single_affiliation = single_affiliation.upper().strip()
-        
-        # Conjunto para almacenar países encontrados (evita duplicados dentro de una misma afiliación)
-        found_countries = set()
-        
-        # Buscar códigos de países en la afiliación
-        for code in all_country_codes:
-            pattern = r'\b' + re.escape(code) + r'\b'
-            if re.search(pattern, single_affiliation):
-                # Usar el nombre completo del país en mayúsculas
-                found_countries.add(country_map[code])
-        
-        # Buscar nombres de países en la afiliación
-        for name in all_country_names:
-            pattern = r'\b' + re.escape(name) + r'\b'
-            if re.search(pattern, single_affiliation):
-                found_countries.add(name)
-        
-        # Si no se encontró ningún país, devolver "NO COUNTRY"
-        if not found_countries:
-            return "NO COUNTRY"
-        
-        # Convertir conjunto a lista y unir con punto y coma
-        return "; ".join(sorted(list(found_countries)))
-    
-    # Función para procesar múltiples afiliaciones separadas por punto y coma
-    def process_multiple_affiliations(affiliations_text):
-        if pd.isna(affiliations_text):
-            return "NO COUNTRY"
-        
-        # Dividir por punto y coma para procesar cada afiliación individualmente
-        affiliations_list = affiliations_text.split(';')
-        
-        # Procesar cada afiliación individualmente
-        country_results = []
-        for affiliation in affiliations_list:
-            affiliation = affiliation.strip()
-            # Incluso si la afiliación está vacía, procesarla para que se agregue "NO COUNTRY"
-            country_result = extract_countries_from_single_affiliation(affiliation)
-            country_results.append(country_result)
-        
-        # Unir los resultados con punto y coma, manteniendo la estructura original
-        return "; ".join(country_results)
-    
-    # Aplicar la función a cada fila del DataFrame
-    df['Country'] = df['Affiliation'].apply(process_multiple_affiliations)
-    
+    df = df.copy()
+    df['Affiliation'] = (
+        df['Affiliation']
+        .fillna(AFFILIATION_PLACEHOLDER)
+        .replace(r'^\s*$', AFFILIATION_PLACEHOLDER, regex=True)
+    )
     return df
 
-# Ejemplo de uso
-# def main():
-#     # Ruta a los archivos (ajustar según sea necesario)
-#     data_file = r"tests\files\wos_author_affiliation.csv"
-#     country_codes_file = r"tests\files\country.csv"
-    
-#     # Cargar datos
-#     try:
-#         df = pd.read_csv(data_file)
-#         df = fill_missing_affiliations(df)
-#         # Verificar si existe la columna 'Affiliation'
-#         if 'Affiliation' not in df.columns:
-#             print(f"Error: El archivo {data_file} no contiene la columna 'Affiliation'")
-#             return
-        
-#         # Procesar datos
-#         result_df = extract_countries(df, country_codes_file)
-        
-#         # Guardar resultado
-#         result_df.to_csv("affiliations_with_countries.csv", index=False)
-#         print("Procesamiento completado. Resultado guardado en 'affiliations_with_countries.csv'")
-        
-#         # Mostrar algunas filas para verificar
-#         print("\nPrimeras filas del resultado:")
-#         print(result_df[['Affiliation', 'Country']].head())
-        
-#     except Exception as e:
-#         print(f"Error al procesar el archivo: {e}")
 
-# if __name__ == "__main__":
-#     main()
+def extract_countries(df: pd.DataFrame, country_codes_file: str) -> pd.DataFrame:
+    """
+    Extract country names from the 'Affiliation' column into a new 'Country' column.
+    Handles single vs. multiple affiliation parts and avoids false positives.
+
+    Args:
+        df: DataFrame with an 'Affiliation' column.
+        country_codes_file: Path to a CSV with 'code;name' rows.
+    Returns:
+        DataFrame with an added 'Country' column.
+    """
+    if not os.path.exists(country_codes_file):
+        logger.error(f"Country codes file not found: {country_codes_file}")
+        raise FileNotFoundError(f"Country codes file not found: {country_codes_file}")
+
+    country_df = pd.read_csv(
+        country_codes_file,
+        sep=';',
+        header=None,
+        names=['code', 'name'],
+        dtype=str
+    )
+    country_df['code'] = country_df['code'].str.strip().str.upper()
+    country_df['name'] = country_df['name'].str.strip().str.upper()
+
+    # Build regex patterns for full names
+    name_patterns: List[Tuple[re.Pattern, str]] = []
+    for country in sorted(country_df['name'].unique(), key=len, reverse=True):
+        name_patterns.append((re.compile(rf"\b{re.escape(country)}\b"), country))
+
+    # Build regex patterns for codes
+    code_patterns: List[Tuple[re.Pattern, str]] = []
+    for code, name in zip(country_df['code'], country_df['name']):
+        code_patterns.append((re.compile(rf"(?:,|\b){re.escape(code)}\b"), name))
+
+    # Set of valid full names and codes for quick lookup
+    valid_names = set(country_df['name'])
+    valid_codes = set(country_df['code'])
+
+    def extract_from_one(text: str) -> List[str]:
+        """Extract country matches -- names first, then codes as fallback."""
+        if not text or text.strip().upper() == AFFILIATION_PLACEHOLDER:
+            return []
+        txt = text.upper()
+        found: List[str] = []
+        # 1) Full name matches
+        for pat, cname in name_patterns:
+            if pat.search(txt):
+                alias = ALIASES.get(cname, cname)
+                if alias not in found:
+                    found.append(alias)
+        if found:
+            return found
+        # 2) Code matches only if no full name
+        for pat, cname in code_patterns:
+            if pat.search(txt):
+                alias = ALIASES.get(cname, cname)
+                if alias not in found:
+                    found.append(alias)
+        return found
+
+    def process_affiliation_cell(cell: str) -> str:
+        # Split on semicolon, but skip trivial splits
+        parts = re.split(r';\s*', cell) if cell and ';' in cell else [cell]
+        # If single part, apply single-part logic
+        if len(parts) == 1:
+            matches = extract_from_one(parts[0])
+            if not matches:
+                return COUNTRY_PLACEHOLDER
+            # If multiple, take the one appearing last in text
+            if len(matches) > 1:
+                # find last by scanning positions
+                occurrences = []
+                upper = parts[0].upper()
+                for cname in matches:
+                    idx = upper.rfind(cname)
+                    occurrences.append((idx, cname))
+                return max(occurrences)[1]
+            return matches[0]
+
+        # Multiple parts: filter out parts that are empty or exact country codes/names
+        filtered = []
+        for p in parts:
+            up = p.strip().upper()
+            if not up or up in valid_names or up in valid_codes:
+                continue
+            filtered.append(p)
+        if not filtered:
+            return COUNTRY_PLACEHOLDER
+        # Extract from each remaining part and aggregate
+        agg: List[str] = []
+        for p in filtered:
+            for cname in extract_from_one(p):
+                if cname not in agg:
+                    agg.append(cname)
+        return '; '.join(agg) if agg else COUNTRY_PLACEHOLDER
+
+    df = df.copy()
+    df['Country'] = df['Affiliation'].apply(process_affiliation_cell)
+    return df
