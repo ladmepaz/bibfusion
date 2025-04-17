@@ -3,11 +3,10 @@ import re
 
 def scopus_csv_to_df(file_path):
     """
-    Reads a Scopus CSV file and transforms the column titles by:
-    - Converting them to lowercase.
-    - Removing parentheses '(' and ')'.
-    - Replacing blank spaces with underscores '_'.
-    Then, it makes the contents of specified columns uppercase.
+    Reads a Scopus CSV file and transforms the column titles, normalizes text, and adds a column 'SR':
+    - Column titles are made lowercase, parentheses removed, and spaces replaced with underscores.
+    - Specified columns are converted to uppercase.
+    - Adds a 'SR' column combining: First author, Year, Abbreviated Journal (without dots).
 
     Parameters:
     ----------
@@ -17,34 +16,24 @@ def scopus_csv_to_df(file_path):
     Returns:
     -------
     pd.DataFrame
-        DataFrame containing the data from the CSV file with transformed column names
-        and uppercase content in specified columns.
+        Processed DataFrame.
     """
     try:
-        # Read the CSV file
         df = pd.read_csv(file_path)
 
-        # Transform column labels
         def transform_column_labels(columns):
             transformed_columns = []
             for col in columns:
-                # Convert to lowercase
                 col = col.lower()
-                # Remove parentheses
                 col = col.replace('(', '').replace(')', '')
-                # Replace spaces with underscores
                 col = col.replace(' ', '_')
-                # Replace any remaining non-alphanumeric characters with underscores
                 col = re.sub(r'\W+', '_', col)
-                # Remove leading or trailing underscores
                 col = col.strip('_')
                 transformed_columns.append(col)
             return transformed_columns
 
-        # Apply the transformation to the column names
         df.columns = transform_column_labels(df.columns)
 
-        # List of columns to make uppercase
         columns_to_uppercase = [
             'authors', 'author_full_names', 'title', 'source_title', 'affiliations',
             'authors_with_affiliations', 'abstract', 'author_keywords', 'index_keywords',
@@ -53,22 +42,14 @@ def scopus_csv_to_df(file_path):
             'language_of_original_document', 'abbreviated_source_title', 'document_type',
             'publication_stage', 'open_access', 'source'
         ]
-
-        # For 'funding_texts', include all columns that start with 'funding_text'
         funding_text_columns = [col for col in df.columns if col.startswith('funding_text')]
         columns_to_uppercase.extend(funding_text_columns)
 
-        # Correct potential typos in column names
-        # For example, 'correspondece_address' should be 'correspondence_address'
         corrected_columns = {
             'correspondece_address': 'correspondence_address',
-            # Add other corrections if needed
         }
-        columns_to_uppercase = [
-            corrected_columns.get(col, col) for col in columns_to_uppercase
-        ]
+        columns_to_uppercase = [corrected_columns.get(col, col) for col in columns_to_uppercase]
 
-        # Make the contents of these columns uppercase
         for col in columns_to_uppercase:
             if col in df.columns:
                 df[col] = df[col].astype(str).str.upper()
@@ -76,10 +57,20 @@ def scopus_csv_to_df(file_path):
                 print(f"Warning: Column '{col}' not found in DataFrame.")
 
         rename_columns = {
-            'authors':'author', 'art_no':'article_number', 'language_of_original_document': 'language',
-            'open_access':'open_access_indicator', 'source_title':'journal'
+            'authors': 'author', 
+            'art_no': 'article_number', 
+            'language_of_original_document': 'language',
+            'open_access': 'open_access_indicator', 
+            'source_title': 'journal'
         }
         df.rename(columns=rename_columns, inplace=True)
+
+        # Crear columna SR
+        if all(col in df.columns for col in ['author', 'year', 'abbreviated_source_title']):
+            df['SR'] = df.apply(lambda row: f"{row['author'].split(';')[0].strip()}, {row['year']}, {row['abbreviated_source_title'].replace('.', '')}", axis=1)
+        else:
+            print("Warning: One or more columns required for 'SR' creation are missing.")
+
         return df
 
     except FileNotFoundError:
