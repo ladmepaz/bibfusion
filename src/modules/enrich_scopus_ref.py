@@ -78,3 +78,99 @@ def enrich_references_with_journal_abbr(
 
     # 6) Eliminar columna auxiliar de scimago
     return enriched.drop(columns=['journal_abbr_scimago'])
+
+import pandas as pd
+
+def fix_source_titles(
+    scopus_references: pd.DataFrame,
+    scopus_df: pd.DataFrame,
+    scimago_df: pd.DataFrame
+) -> pd.DataFrame:
+    df = scopus_references.copy()
+    df['clean_abbr'] = df['source_title'].str.replace('.', '', regex=False).str.strip()
+
+    # primary mapping from Scopus
+    journal_map = (
+        scopus_df[['journal','abbreviated_source_title']]
+        .dropna(subset=['abbreviated_source_title'])
+        .assign(
+            clean_abbr=lambda d: (
+                d['abbreviated_source_title']
+                 .str.replace('.', '', regex=False)
+                 .str.strip()
+            )
+        )
+        .loc[:, ['clean_abbr','journal']]
+        .drop_duplicates(subset=['clean_abbr'])
+    )
+
+    # fallback mapping from Scimago, with explicit .astype(str)
+    scimago_map = (
+        scimago_df[['Title','journal_abbr']]
+        .dropna(subset=['journal_abbr'])
+        .astype({'journal_abbr': str, 'Title': str})
+        .assign(
+            clean_abbr=lambda d: (
+                d['journal_abbr']
+                 .str.replace('.', '', regex=False)
+                 .str.strip()
+            ),
+            full_title=lambda d: d['Title']
+        )
+        .loc[:, ['clean_abbr','full_title']]
+        .drop_duplicates(subset=['clean_abbr'])
+    )
+
+    merged = (
+        df
+        .merge(journal_map, on='clean_abbr', how='left')
+        .merge(scimago_map, on='clean_abbr', how='left')
+    )
+
+    # choose priority: Scopus->Scimago->original
+    def choose_full(row):
+        if pd.notna(row['journal']):
+            return row['journal']
+        if pd.notna(row['full_title']):
+            return row['full_title']
+        return row['source_title']
+
+    merged['source_title'] = merged.apply(choose_full, axis=1)
+    return merged.drop(columns=['clean_abbr','journal','full_title'])
+
+import pandas as pd
+
+def add_SR_ref(
+    df: pd.DataFrame,
+    author_col: str = 'author',
+    year_col:   str = 'year',
+    jabbr_col:  str = 'journal_abbr',
+    new_col:    str = 'SR_ref'
+) -> pd.DataFrame:
+    """
+    Given a DataFrame with columns for authors, year, and journal_abbr,
+    creates a new column (default name "SR_ref") of the form:
+       FIRST_AUTHOR, YEAR, JOURNAL_ABBR
+
+    - FIRST_AUTHOR is the substring before the first ';' in the author_col.
+    - YEAR is taken as-is (converted to string).
+    - JOURNAL_ABBR is taken as-is.
+    """
+    df = df.copy()
+    # extract first author (everything before the first semicolon)
+    df['__first'] = (
+        df[author_col]
+          .fillna('')                      # avoid NaNs
+          .astype(str)                     # ensure it's a str
+          .str.split(';', n=1).str[0]      # split once, take first
+          .str.strip()                     # trim whitespace
+    )
+
+    # now compose the SR_ref
+    df[new_col] = (
+        df['__first'] + ', '
+        + df[year_col].fillna('').astype(str) + ', '
+        + df[jabbr_col].fillna('').astype(str)
+    )
+
+    return df.drop(columns='__first')
