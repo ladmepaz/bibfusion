@@ -94,3 +94,81 @@ def process_scimago_data(scimago_files_path_pattern, abbr_file_path):
 #     r"C:\Users\User\OneDrive\Documentos\Preprocessing\preprocessing_3\preprocessing\tests\files\scimagojr *.csv",
 #     r"C:\Users\User\OneDrive\Documentos\Preprocessing\preprocessing_3\preprocessing\tests\files\scimago_2024_combined.csv"
 # )
+
+import pandas as pd
+import re
+
+def parse_medline_journals(txt_path: str) -> pd.DataFrame:
+    """
+    Parse a PubMed J_Medline.txt file into a DataFrame.
+
+    Each journal block (separated by lines of dashes) becomes one row,
+    with columns:
+      - JrId
+      - JournalTitle
+      - MedAbbr
+      - PrintISSN
+      - OnlineISSN
+      - IsoAbbr
+      - NlmId
+
+    Parameters
+    ----------
+    txt_path : str
+        Path to the J_Medline.txt file.
+
+    Returns
+    -------
+    pd.DataFrame
+    """
+    # Read the entire file
+    with open(txt_path, 'r', encoding='utf-8') as f:
+        text = f.read()
+
+    # Split into raw records on lines of 50+ dashes
+    raw_records = re.split(r'-{5,}', text)
+
+    records = []
+    for raw in raw_records:
+        lines = [ln.strip() for ln in raw.strip().splitlines() if ln.strip()]
+        if not lines:
+            continue
+
+        rec = {}
+        for line in lines:
+            if ':' not in line:
+                continue
+            key, val = line.split(':', 1)
+            key = key.strip()
+            val = val.strip()
+
+            # map PubMed field names -> our column names
+            if key == 'JrId':
+                rec['JrId'] = val
+            elif key == 'JournalTitle':
+                rec['JournalTitle'] = val
+            elif key == 'MedAbbr':
+                rec['MedAbbr'] = val
+            elif key == 'ISSN (Print)':
+                rec['PrintISSN'] = val
+            elif key == 'ISSN (Online)':
+                rec['OnlineISSN'] = val
+            elif key == 'IsoAbbr':
+                rec['IsoAbbr'] = val
+            elif key == 'NlmId':
+                rec['NlmId'] = val
+
+        records.append(rec)
+
+    # Build DataFrame, ensure all expected columns exist
+    df = pd.DataFrame(records, columns=[
+        'JrId', 'JournalTitle', 'MedAbbr',
+        'PrintISSN', 'OnlineISSN',
+        'IsoAbbr', 'NlmId'
+    ])
+
+    # Clean up empty strings into NaN
+    df.replace({'': pd.NA}, inplace=True)
+
+    return df
+
