@@ -6,17 +6,7 @@ def scopus_csv_to_df(file_path):
     Reads a Scopus CSV file and transforms the column titles, normalizes text, and adds a column 'SR':
     - Column titles are made lowercase, parentheses removed, and spaces replaced with underscores.
     - Specified columns are converted to uppercase.
-    - Adds a 'SR' column combining: First author, Year, Abbreviated Journal (without dots).
-
-    Parameters:
-    ----------
-    file_path : str
-        The path to the Scopus CSV file.
-
-    Returns:
-    -------
-    pd.DataFrame
-        Processed DataFrame.
+    - Adds a 'SR' column combining: First author (dots removed), Year, Abbreviated Journal (without dots).
     """
     try:
         df = pd.read_csv(file_path)
@@ -57,17 +47,22 @@ def scopus_csv_to_df(file_path):
                 print(f"Warning: Column '{col}' not found in DataFrame.")
 
         rename_columns = {
-            'authors': 'author', 
-            'art_no': 'article_number', 
+            'authors': 'author',
+            'art_no': 'article_number',
             'language_of_original_document': 'language',
-            'open_access': 'open_access_indicator', 
+            'open_access': 'open_access_indicator',
             'source_title': 'journal'
         }
         df.rename(columns=rename_columns, inplace=True)
 
-        # Crear columna SR
+        # Crear columna SR (sin puntos en las iniciales del autor)
         if all(col in df.columns for col in ['author', 'year', 'abbreviated_source_title']):
-            df['SR'] = df.apply(lambda row: f"{row['author'].split(';')[0].strip()}, {row['year']}, {row['abbreviated_source_title'].replace('.', '')}", axis=1)
+            df['SR'] = df.apply(
+                lambda row: f"{row['author'].split(';')[0].replace('.', '').strip()}, "
+                            f"{row['year']}, "
+                            f"{row['abbreviated_source_title'].replace('.', '')}",
+                axis=1
+            )
         else:
             print("Warning: One or more columns required for 'SR' creation are missing.")
 
