@@ -94,3 +94,199 @@ def process_scimago_data(scimago_files_path_pattern, abbr_file_path):
 #     r"C:\Users\User\OneDrive\Documentos\Preprocessing\preprocessing_3\preprocessing\tests\files\scimagojr *.csv",
 #     r"C:\Users\User\OneDrive\Documentos\Preprocessing\preprocessing_3\preprocessing\tests\files\scimago_2024_combined.csv"
 # )
+
+import pandas as pd
+import re
+
+def parse_medline_journals(txt_path: str) -> pd.DataFrame:
+    """
+    Parse a PubMed J_Medline.txt file into a DataFrame.
+
+    Each journal block (separated by lines of dashes) becomes one row,
+    with columns:
+      - JrId
+      - JournalTitle
+      - MedAbbr
+      - PrintISSN
+      - OnlineISSN
+      - IsoAbbr
+      - NlmId
+
+    Parameters
+    ----------
+    txt_path : str
+        Path to the J_Medline.txt file.
+
+    Returns
+    -------
+    pd.DataFrame
+    """
+    # Read the entire file
+    with open(txt_path, 'r', encoding='utf-8') as f:
+        text = f.read()
+
+    # Split into raw records on lines of 50+ dashes
+    raw_records = re.split(r'-{5,}', text)
+
+    records = []
+    for raw in raw_records:
+        lines = [ln.strip() for ln in raw.strip().splitlines() if ln.strip()]
+        if not lines:
+            continue
+
+        rec = {}
+        for line in lines:
+            if ':' not in line:
+                continue
+            key, val = line.split(':', 1)
+            key = key.strip()
+            val = val.strip()
+
+            # map PubMed field names -> our column names
+            if key == 'JrId':
+                rec['JrId'] = val
+            elif key == 'JournalTitle':
+                rec['JournalTitle'] = val
+            elif key == 'MedAbbr':
+                rec['MedAbbr'] = val
+            elif key == 'ISSN (Print)':
+                rec['PrintISSN'] = val
+            elif key == 'ISSN (Online)':
+                rec['OnlineISSN'] = val
+            elif key == 'IsoAbbr':
+                rec['IsoAbbr'] = val
+            elif key == 'NlmId':
+                rec['NlmId'] = val
+
+        records.append(rec)
+
+    # Build DataFrame, ensure all expected columns exist
+    df = pd.DataFrame(records, columns=[
+        'JrId', 'JournalTitle', 'MedAbbr',
+        'PrintISSN', 'OnlineISSN',
+        'IsoAbbr', 'NlmId'
+    ])
+
+    # Clean up empty strings into NaN
+    df.replace({'': pd.NA}, inplace=True)
+
+    return df
+
+import pandas as pd
+import re
+
+def parse_medline_journals(txt_path: str) -> pd.DataFrame:
+    """
+    Parse a PubMed J_Medline.txt file into a DataFrame, then:
+      - Uppercase JournalTitle, MedAbbr, IsoAbbr, NlmId
+      - Strip hyphens from PrintISSN & OnlineISSN
+      - Preserve missing ISSNs as NA
+    
+    Parameters
+    ----------
+    txt_path : str
+        Path to the J_Medline.txt file.
+
+    Returns
+    -------
+    pd.DataFrame
+    """
+    # --- read entire file ---
+    with open(txt_path, 'r', encoding='utf-8') as f:
+        text = f.read()
+
+    # --- split into journal blocks ---
+    raw_records = re.split(r'-{5,}', text)
+
+    records = []
+    for raw in raw_records:
+        lines = [ln.strip() for ln in raw.strip().splitlines() if ln.strip()]
+        if not lines:
+            continue
+
+        rec = {}
+        for line in lines:
+            if ':' not in line:
+                continue
+            key, val = line.split(':', 1)
+            key = key.strip()
+            val = val.strip()
+
+            if key == 'JrId':
+                rec['JrId'] = val
+            elif key == 'JournalTitle':
+                rec['JournalTitle'] = val
+            elif key == 'MedAbbr':
+                rec['MedAbbr'] = val
+            elif key == 'ISSN (Print)':
+                rec['PrintISSN'] = val
+            elif key == 'ISSN (Online)':
+                rec['OnlineISSN'] = val
+            elif key == 'IsoAbbr':
+                rec['IsoAbbr'] = val
+            elif key == 'NlmId':
+                rec['NlmId'] = val
+
+        records.append(rec)
+
+    # --- to DataFrame ---
+    df = pd.DataFrame(records, columns=[
+        'JrId', 'JournalTitle', 'MedAbbr',
+        'PrintISSN', 'OnlineISSN',
+        'IsoAbbr', 'NlmId'
+    ])
+
+    # --- clean empty strings -> NA ---
+    df.replace({'': pd.NA}, inplace=True)
+
+    # --- uppercase text columns ---
+    for col in ['JournalTitle', 'MedAbbr', 'IsoAbbr', 'NlmId']:
+        df[col] = df[col].str.upper()
+
+    # --- strip hyphens from ISSNs ---
+    df['PrintISSN']  = df['PrintISSN'].str.replace('-', '', regex=False)
+    df['OnlineISSN'] = df['OnlineISSN'].str.replace('-', '', regex=False)
+
+    return df
+
+import pandas as pd
+
+def enrich_scimago_with_pubmed(scimago_df: pd.DataFrame,
+                               pubmed_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Fill missing `journal_abbr` in scimago_df by matching ISSNs from pubmed_df.
+
+    1) Wherever scimago_df.journal_abbr is null, look up scimago_df.Issn in
+       pubmed_df.PrintISSN → MedAbbr
+    2) For any still-null, look up scimago_df.eIssn in pubmed_df.OnlineISSN → MedAbbr
+
+    Returns a new DataFrame with the same rows/columns as scimago_df.
+    """
+    df = scimago_df.copy()
+
+    # build mapping from PrintISSN → MedAbbr
+    pub_print = (
+        pubmed_df[['PrintISSN', 'MedAbbr']]
+        .dropna(subset=['PrintISSN'])
+        .drop_duplicates(subset=['PrintISSN'])
+    )
+    print_map = dict(zip(pub_print['PrintISSN'], pub_print['MedAbbr']))
+
+    # build mapping from OnlineISSN → MedAbbr
+    pub_online = (
+        pubmed_df[['OnlineISSN', 'MedAbbr']]
+        .dropna(subset=['OnlineISSN'])
+        .drop_duplicates(subset=['OnlineISSN'])
+    )
+    online_map = dict(zip(pub_online['OnlineISSN'], pub_online['MedAbbr']))
+
+    # first fill from the print ISSN
+    df['journal_abbr'] = df['journal_abbr'].fillna(
+        df['Issn'].map(print_map)
+    )
+    # then fill remaining from the e‑ISSN
+    df['journal_abbr'] = df['journal_abbr'].fillna(
+        df['eIssn'].map(online_map)
+    )
+
+    return df
