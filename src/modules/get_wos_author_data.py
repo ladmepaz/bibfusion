@@ -123,7 +123,8 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
     # Apply the function
     author_rows = wos_authors.apply(assign_author_order, axis=1)
     authors_df = pd.concat(author_rows.tolist(), ignore_index=True)
-
+    
+    
     # Step 5: Fill missing 'AuthorFullName' with 'AuthorName' if needed
     authors_df['AuthorFullName'] = authors_df['AuthorFullName'].where(
         authors_df['AuthorFullName'] != '', authors_df['AuthorName']
@@ -308,17 +309,48 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
     authors_df['OrcidList'] = authors_df['orcid'].apply(parse_orcid_ids)
 
     # Assign ORCID IDs to authors
-    def get_author_orcid(row):
-        # Standardize the author's full name
-        author_full_name_std = standardize_name_for_matching(row['AuthorFullName'])
-        # Match the author's full name with the ORCID list
-        for orcid_entry in row['OrcidList']:
-            orcid_name_std = standardize_name_for_matching(orcid_entry['AuthorFullName'])
-            if author_full_name_std == orcid_name_std:
-                return orcid_entry['Orcid']
-        return ''
+    def split_orcid_field(orcid_field):
+        # Divide por punto y coma, y remueve espacios
+        return [entry.strip() for entry in orcid_field.split(';') if entry.strip()]
 
-    authors_df['Orcid'] = authors_df.apply(get_author_orcid, axis=1)
+    def extract_orcid_mapping(orcid_field):
+        """
+        Devuelve una lista con ORCID por autor en orden. Si un autor no tiene ORCID, se coloca ''.
+        """
+        entries = split_orcid_field(orcid_field)
+        result = []
+        for entry in entries:
+            if '/' in entry:
+                parts = entry.split('/')
+                if len(parts) >= 2:
+                    result.append(parts[-1])  # ORCID
+                else:
+                    result.append('')
+            else:
+                result.append('')  # No ORCID
+        return result
+    # Asignar ORCID a cada autor individualmente
+    def assign_orcid(row):
+        orcid_list = extract_orcid_mapping(row['orcid'])
+        index = row['AuthorOrder'] - 1
+        if index < len(orcid_list):
+            return orcid_list[int(index)]
+        else:
+            return ''
+
+    authors_df['Orcid'] = authors_df.apply(assign_orcid, axis=1)
+
+    # def get_author_orcid(row):
+    #     # Standardize the author's full name
+    #     author_full_name_std = standardize_name_for_matching(row['AuthorFullName'])
+    #     # Match the author's full name with the ORCID list
+    #     for orcid_entry in row['OrcidList']:
+    #         orcid_name_std = standardize_name_for_matching(orcid_entry['AuthorFullName'])
+    #         if author_full_name_std == orcid_name_std:
+    #             return orcid_entry['Orcid']
+    #     return ''
+
+    # authors_df['Orcid'] = authors_df.apply(get_author_orcid, axis=1)
 
     # Step 15: Parse 'researcher_id_number' to extract ResearcherIDs and map to authors
     def parse_researcher_ids(ri_entry):
