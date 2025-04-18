@@ -43,6 +43,9 @@ def add_year_and_scimago_info(
         how='left',
         on='SR'
     )
+    
+    wos_df_3['year'] = wos_df_3['year'].astype(str)
+    scimagojr_df['year'] = scimagojr_df['year'].astype(str)
 
     # 3) Left‑merge with scimagojr_df on journal_id=Sourceid and year=year
     enriched = scimago_with_year.merge(
