@@ -15,7 +15,7 @@ def enrich_references_with_journal_abbr(
     scopus_references : pd.DataFrame
         DataFrame de referencias (output de process_scopus_references)
         que contiene la columna 'source_title'.
-    scopus_df : pd.DataFrame
+    scopus_df_2 : pd.DataFrame
         DataFrame Scopus original con columnas:
           - 'journal'
           - 'abbreviated_source_title'
@@ -79,7 +79,6 @@ def enrich_references_with_journal_abbr(
     # 6) Eliminar columna auxiliar de scimago
     return enriched.drop(columns=['journal_abbr_scimago'])
 
-import pandas as pd
 
 def fix_source_titles(
     scopus_references_1: pd.DataFrame,
@@ -138,7 +137,6 @@ def fix_source_titles(
     merged['source_title'] = merged.apply(choose_full, axis=1)
     return merged.drop(columns=['clean_abbr','journal','full_title'])
 
-import pandas as pd
 
 def add_SR_ref(
     df: pd.DataFrame,
@@ -175,7 +173,6 @@ def add_SR_ref(
 
     return df.drop(columns='__first')
 
-import pandas as pd
 
 def extract_sr_mapping(scopus_references: pd.DataFrame) -> pd.DataFrame:
     """
