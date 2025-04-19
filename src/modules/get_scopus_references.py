@@ -5,6 +5,11 @@ import urllib.parse
 # A global set that will hold the country names for _extract_title_journal_volume_pages
 LISTA_PAISES = set()
 
+# paises_df = pd.read_csv(
+# 	r'C:\Users\User\OneDrive\Documentos\Preprocessing\preprocessing_3\preprocessing\tests\files\country.csv',
+# 	encoding='utf-8', sep=';'
+# )
+
 def process_scopus_references(df: pd.DataFrame, paises_df: pd.DataFrame):
     """
     Toma un DataFrame Scopus con columna 'references' y un DataFrame de países,
