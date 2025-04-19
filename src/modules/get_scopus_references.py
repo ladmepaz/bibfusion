@@ -7,7 +7,9 @@ LISTA_PAISES = set()
 
 # paises_df = pd.read_csv(
 # 	r'C:\Users\User\OneDrive\Documentos\Preprocessing\preprocessing_3\preprocessing\tests\files\country.csv',
-# 	encoding='utf-8', sep=';'
+#     sep=';',
+#     header=None,
+#     names=['codigo','pais']
 # )
 
 def process_scopus_references(df: pd.DataFrame, paises_df: pd.DataFrame):
