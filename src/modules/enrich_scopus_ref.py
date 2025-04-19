@@ -82,16 +82,16 @@ def enrich_references_with_journal_abbr(
 import pandas as pd
 
 def fix_source_titles(
-    scopus_references: pd.DataFrame,
-    scopus_df: pd.DataFrame,
+    scopus_references_1: pd.DataFrame,
+    scopus_df_2: pd.DataFrame,
     scimago_df: pd.DataFrame
 ) -> pd.DataFrame:
-    df = scopus_references.copy()
+    df = scopus_references_1.copy()
     df['clean_abbr'] = df['source_title'].str.replace('.', '', regex=False).str.strip()
 
     # primary mapping from Scopus
     journal_map = (
-        scopus_df[['journal','abbreviated_source_title']]
+        scopus_df_2[['journal','abbreviated_source_title']]
         .dropna(subset=['abbreviated_source_title'])
         .assign(
             clean_abbr=lambda d: (
