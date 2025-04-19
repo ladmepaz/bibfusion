@@ -174,3 +174,32 @@ def add_SR_ref(
     )
 
     return df.drop(columns='__first')
+
+import pandas as pd
+
+def extract_sr_mapping(scopus_references: pd.DataFrame) -> pd.DataFrame:
+    """
+    From the enriched references table, pull out a deduplicated mapping
+    of main-article SR to reference SR_ref.
+
+    Parameters
+    ----------
+    scopus_references : pd.DataFrame
+        Must contain columns 'SR' and 'SR_ref'.
+
+    Returns
+    -------
+    pd.DataFrame
+        Two‑column DataFrame with columns ['SR','SR_ref'], one row per unique pair.
+    """
+    # sanity check
+    missing = {'SR','SR_ref'} - set(scopus_references.columns)
+    if missing:
+        raise KeyError(f"Missing columns in input: {missing}")
+
+    mapping = (
+        scopus_references[['SR','SR_ref']]
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
+    return mapping
