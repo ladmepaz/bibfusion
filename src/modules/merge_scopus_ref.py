@@ -1,5 +1,5 @@
-import pandas as pd
 import logging
+import pandas as pd
 
 def merge_scopus_ref(
     scopus_df: pd.DataFrame,
@@ -10,20 +10,29 @@ def merge_scopus_ref(
     marcando qué filas son el artículo principal y cuáles son referencias, y evitando duplicados
     en función de la columna 'SR', dando preferencia a los artículos principales.
 
+    Además:
+      - Renombra en las referencias:
+          'source_title' → 'journal'
+          'journal_abbr' → 'abbreviated_source_title'
+      - Elimina 'source_title_mainarticle' y 'pages'
+      - Al final, elimina todos los puntos de la columna 'abbreviated_source_title'
+
     Parameters:
     -----------
     scopus_df : pd.DataFrame
         DataFrame original de Scopus con columna 'SR'.
     scopus_ref_enriched : pd.DataFrame
-        DataFrame de referencias enriquecidas con columnas 'SR_ref' y 'CR_ref'.
+        DataFrame de referencias enriquecidas con columnas 'SR_ref', 'CR_ref',
+        'source_title', 'journal_abbr', 'source_title_mainarticle', 'pages', etc.
 
     Returns:
     --------
     pd.DataFrame
         DataFrame combinado con:
         - columna 'ismainarticle' indicando TRUE/FALSE
-        - todas las columnas originales de scopus_df
-        - concatenación de artículos y referencias (sin duplicados en 'SR')
+        - columnas renombradas y ajustadas
+        - sin duplicados en 'SR', priorizando artículos principales
+        - sin puntos en 'abbreviated_source_title'
     """
     # Configurar logging
     logging.basicConfig(
@@ -41,6 +50,18 @@ def merge_scopus_ref(
     refs['ismainarticle']       = 'FALSE'
     logging.info("Añadida columna 'ismainarticle'")
 
+    # 1b) Renombrar columnas en refs
+    rename_map = {
+        'source_title': 'journal',
+        'journal_abbr': 'abbreviated_source_title'
+    }
+    refs = refs.rename(columns=rename_map)
+    # Eliminar columnas innecesarias
+    for drop_col in ('source_title_mainarticle', 'pages'):
+        if drop_col in refs.columns:
+            refs = refs.drop(columns=[drop_col])
+            logging.info(f"Eliminada columna '{drop_col}' de referencias")
+
     # 2) Procesar columnas SR en refs
     if 'SR' in refs.columns:
         refs = refs.drop(columns=['SR'])
@@ -55,7 +76,7 @@ def merge_scopus_ref(
     # 3) Eliminar duplicados en refs basado en 'SR', priorizando DOI válido
     if 'SR' in refs.columns:
         def _prioritize(group):
-            valid = group['doi'].notnull() & (group['doi']!='') & (group['doi']!='-')
+            valid = group['doi'].notnull() & (group['doi'] != '') & (group['doi'] != '-')
             if valid.any():
                 return group[valid].iloc[0]
             return group.iloc[0]
@@ -97,6 +118,15 @@ def merge_scopus_ref(
         logging.info("Duplicados en combinado eliminados, priorizando artículos principales")
     else:
         logging.warning("No se encontró 'SR' en combinado; no se eliminaron duplicados")
+
+    # 7) Eliminar puntos en abbreviated_source_title
+    if 'abbreviated_source_title' in combined.columns:
+        combined['abbreviated_source_title'] = (
+            combined['abbreviated_source_title']
+            .astype(str)
+            .str.replace('.', '', regex=False)
+        )
+        logging.info("Eliminados puntos de 'abbreviated_source_title'")
 
     logging.info("merge_scopus_ref completado con éxito")
     return combined
