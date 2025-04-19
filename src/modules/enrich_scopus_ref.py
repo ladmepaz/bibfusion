@@ -15,7 +15,7 @@ def enrich_references_with_journal_abbr(
     scopus_references : pd.DataFrame
         DataFrame de referencias (output de process_scopus_references)
         que contiene la columna 'source_title'.
-    scopus_df : pd.DataFrame
+    scopus_df_2 : pd.DataFrame
         DataFrame Scopus original con columnas:
           - 'journal'
           - 'abbreviated_source_title'
@@ -79,19 +79,18 @@ def enrich_references_with_journal_abbr(
     # 6) Eliminar columna auxiliar de scimago
     return enriched.drop(columns=['journal_abbr_scimago'])
 
-import pandas as pd
 
 def fix_source_titles(
-    scopus_references: pd.DataFrame,
-    scopus_df: pd.DataFrame,
+    scopus_references_1: pd.DataFrame,
+    scopus_df_2: pd.DataFrame,
     scimago_df: pd.DataFrame
 ) -> pd.DataFrame:
-    df = scopus_references.copy()
+    df = scopus_references_1.copy()
     df['clean_abbr'] = df['source_title'].str.replace('.', '', regex=False).str.strip()
 
     # primary mapping from Scopus
     journal_map = (
-        scopus_df[['journal','abbreviated_source_title']]
+        scopus_df_2[['journal','abbreviated_source_title']]
         .dropna(subset=['abbreviated_source_title'])
         .assign(
             clean_abbr=lambda d: (
@@ -138,7 +137,6 @@ def fix_source_titles(
     merged['source_title'] = merged.apply(choose_full, axis=1)
     return merged.drop(columns=['clean_abbr','journal','full_title'])
 
-import pandas as pd
 
 def add_SR_ref(
     df: pd.DataFrame,
@@ -174,3 +172,31 @@ def add_SR_ref(
     )
 
     return df.drop(columns='__first')
+
+
+def extract_sr_mapping(scopus_references: pd.DataFrame) -> pd.DataFrame:
+    """
+    From the enriched references table, pull out a deduplicated mapping
+    of main-article SR to reference SR_ref.
+
+    Parameters
+    ----------
+    scopus_references : pd.DataFrame
+        Must contain columns 'SR' and 'SR_ref'.
+
+    Returns
+    -------
+    pd.DataFrame
+        Two‑column DataFrame with columns ['SR','SR_ref'], one row per unique pair.
+    """
+    # sanity check
+    missing = {'SR','SR_ref'} - set(scopus_references.columns)
+    if missing:
+        raise KeyError(f"Missing columns in input: {missing}")
+
+    mapping = (
+        scopus_references[['SR','SR_ref']]
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
+    return mapping

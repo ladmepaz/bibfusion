@@ -5,192 +5,167 @@ import urllib.parse
 # A global set that will hold the country names for _extract_title_journal_volume_pages
 LISTA_PAISES = set()
 
-def process_scopus_references(df: pd.DataFrame, paises_df: pd.DataFrame):
+def process_scopus_references(df: pd.DataFrame, paises_df: pd.DataFrame) -> pd.DataFrame:
     """
     Toma un DataFrame Scopus con columna 'references' y un DataFrame de países,
-    devuelve un DataFrame con las referencias parseadas (incluyendo SR) y el DataFrame original con 'source_title'.
-    
+    y devuelve un único DataFrame con las referencias individuales parseadas
+    (incluyendo SR y CR_ref).
+
     Parameters:
     -----------
     df : pd.DataFrame
         DataFrame que debe contener al menos las columnas 'references' y 'SR'.
     paises_df : pd.DataFrame
         DataFrame que debe tener una columna 'pais' con los nombres de los países.
-    
+
     Returns:
     --------
     references_df : pd.DataFrame
-        DataFrame con las referencias individuales y sus campos (author, title, etc.) + SR + CR_ref.
-    scopus_df : pd.DataFrame
-        Copia del df original, con la columna adicional 'source_title'.
+        DataFrame con las referencias individuales y sus campos
+        (author, title, source_title, year, volume, pages, doi, SR, CR_ref).
     """
     global LISTA_PAISES
-    
+
     if 'references' not in df.columns:
         raise ValueError("El DataFrame debe contener la columna 'references'")
-    
+
     # Construir el conjunto de países
     LISTA_PAISES = set(paises_df['pais'].str.upper().str.strip())
-    
+
     scopus_df = df.copy()
-    
     # Generar source_title a partir de abbreviated_source_title
     if 'abbreviated_source_title' in scopus_df.columns:
         scopus_df['source_title'] = scopus_df['abbreviated_source_title'].str.replace('.', '', regex=False)
     else:
         scopus_df['source_title'] = '-'
-    
+
     references_list = []
-    
     for _, row in scopus_df.iterrows():
-        references_text = str(row['references'])
-        individual_refs = [ref.strip() for ref in re.split(r';\s*', references_text) if ref.strip()]
-        
-        for ref_text in individual_refs:
-            reference_data = _parse_reference(ref_text)
-            if reference_data:
-                reference_data['CR_ref'] = ref_text
-                reference_data['SR']     = row.get('SR', '-')
-                references_list.append(reference_data)
-    
-    # Si no se parseó ninguna referencia, devolvemos un DataFrame vacío
+        refs_text = str(row['references'])
+        indiv = [r.strip() for r in re.split(r';\s*', refs_text) if r.strip()]
+        for ref_text in indiv:
+            data = _parse_reference(ref_text)
+            if data:
+                data['CR_ref'] = ref_text
+                data['SR']     = row.get('SR', '-')
+                references_list.append(data)
+
+    # Si no parseó nada, devuelvo un DataFrame vacío
     if not references_list:
-        return pd.DataFrame(), scopus_df
-    
+        return pd.DataFrame()
+
     references_df = pd.DataFrame(references_list)
     references_df['source_title_mainarticle'] = '-'
-    
+
     # Asegurar existencia y orden de columnas
-    column_order = [
+    cols = [
         'title', 'author', 'source_title', 'source_title_mainarticle',
         'year', 'volume', 'pages', 'doi', 'SR', 'CR_ref'
     ]
-    for col in column_order:
-        if col not in references_df.columns:
-            references_df[col] = '-'
-    references_df = references_df[column_order]
-    
-    return references_df, scopus_df
+    for c in cols:
+        if c not in references_df.columns:
+            references_df[c] = '-'
+    references_df = references_df[cols]
+
+    return references_df
 
 
 def _parse_reference(reference: str):
-    authors, remaining = _extract_authors(reference)
+    authors, rem = _extract_authors(reference)
     if not authors:
         return None
-    
-    doi, remaining   = _extract_doi(remaining)
-    year, remaining  = _extract_year(remaining)
-    title, journal, volume, pages = _extract_title_journal_volume_pages(remaining)
+
+    doi, rem    = _extract_doi(rem)
+    year, rem   = _extract_year(rem)
+    title, journal, vol, pages = _extract_title_journal_volume_pages(rem)
     if not title:
         return None
-    
+
     return {
         'author':       authors,
         'title':        title,
         'source_title': journal,
         'year':         year,
-        'volume':       volume,
+        'volume':       vol,
         'pages':        pages,
         'doi':          doi
     }
-
 
 def _extract_authors(reference: str):
     parts = [p.strip() for p in reference.split(',')]
     if not parts:
         return '', reference
-    
+
     authors = []
-    title_index = None
-    author_pattern = r'^[A-Z][A-Za-z\'\-]+\s+(?:[A-Z]\.?)+$'
-    
+    idx = None
+    pattern = r'^[A-Z][A-Za-z\'\-]+\s+(?:[A-Z]\.?)+$'
     for i, part in enumerate(parts):
-        if re.match(author_pattern, part):
+        if re.match(pattern, part):
             authors.append(part)
         else:
-            title_index = i
+            idx = i
             break
-    
+
     if not authors and parts:
         authors = [parts[0]]
-        title_index = 1
-    
-    if title_index is None:
-        title_index = len(authors)
-        authors = authors[:-1]
-    
-    authors_str = ';'.join(authors)
-    remaining = ', '.join(parts[title_index:])
-    return authors_str, remaining
+        idx = 1
 
+    if idx is None:
+        idx = len(authors)
+        authors = authors[:-1]
+
+    return ';'.join(authors), ', '.join(parts[idx:])
 
 def _extract_doi(text: str):
-    doi_match = re.search(r'DOI:\s*(10\.\S+)', text, flags=re.IGNORECASE)
-    if doi_match:
-        doi = doi_match.group(1)
-        text = text.replace(doi_match.group(0), '')
+    m = re.search(r'DOI:\s*(10\.\S+)', text, flags=re.IGNORECASE)
+    if m:
+        doi = m.group(1); text = text.replace(m.group(0), '')
     else:
-        doi_match = re.search(r'(10\.\S+)', text)
-        if doi_match:
-            doi = doi_match.group(1)
-            text = text.replace(doi, '')
+        m = re.search(r'(10\.\S+)', text)
+        if m:
+            doi = m.group(1); text = text.replace(m.group(1), '')
         else:
             doi = ''
     doi = urllib.parse.unquote(doi).rstrip('.,')
     return doi, text.strip(' ,.')
 
-
 def _extract_year(text: str):
-    year_match = re.search(r'\((\d{4})\)', text)
-    if year_match:
-        year = year_match.group(1)
-        text = text.replace(year_match.group(0), '').strip(' ,.')
-    else:
-        year_match = re.search(r'\b(\d{4})\b', text)
-        if year_match and 1800 <= int(year_match.group(1)) <= 2030:
-            year = year_match.group(1)
-            text = text.replace(year, '').strip(' ,.')
-        else:
-            year = ''
-    return year, text
-
+    m = re.search(r'\((\d{4})\)', text)
+    if m:
+        y = m.group(1); text = text.replace(m.group(0), '')
+        return y, text.strip(' ,.')
+    m = re.search(r'\b(\d{4})\b', text)
+    if m and 1800 <= int(m.group(1)) <= 2030:
+        y = m.group(1); text = text.replace(y, '')
+        return y, text.strip(' ,.')
+    return '', text
 
 def _extract_title_journal_volume_pages(text: str):
     global LISTA_PAISES
-
     text = re.sub(r'\(\d{4}\)', '', text).strip().rstrip(',')
 
-    pages = ""
-    match_pages = re.search(r'PP\.\s*([\d\-–]+)', text)
-    if match_pages:
-        pages = match_pages.group(1).strip()
-        text = text.replace(match_pages.group(0), '').strip().rstrip(',')
+    # páginas
+    pages = ''
+    mp = re.search(r'PP\.\s*([\d\-–]+)', text)
+    if mp:
+        pages = mp.group(1)
+        text = text.replace(mp.group(0), '').strip().rstrip(',')
 
-    components = [comp.strip() for comp in text.split(',') if comp.strip()]
-
-    volume = ""
-    i = len(components) - 1
+    comps = [c.strip() for c in text.split(',') if c.strip()]
+    vol = ''; i = len(comps) - 1
     while i >= 0:
-        comp = components[i]
-        if re.fullmatch(r'\d+([\-–]\d+)?', comp):
-            if not volume:
-                volume = comp
+        c = comps[i]
+        if re.fullmatch(r'\d+([\-–]\d+)?', c):
+            if not vol: vol = c
             i -= 1
-        elif comp.upper() in LISTA_PAISES:
+        elif c.upper() in LISTA_PAISES:
             i -= 1
         else:
             break
 
-    journal = components[i] if i >= 0 else ""
+    journal = comps[i] if i >= 0 else ''
     i -= 1
-
-    title_parts = components[:i+1]
-    title_parts = [part for part in title_parts if part.isupper() or ':' in part]
+    title_parts = comps[:i+1]
+    title_parts = [p for p in title_parts if p.isupper() or ':' in p]
     title = ', '.join(title_parts).strip()
-
-    return title, journal.strip(), volume.strip(), pages.strip()
-
-
-def _clean_text(text: str):
-    text = re.sub(r'\s+', ' ', text)
-    return text.strip(' ,.:;-')
+    return title, journal, vol, pages
