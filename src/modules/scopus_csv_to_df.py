@@ -8,6 +8,7 @@ def scopus_csv_to_df(file_path):
       - upper‑cases key text fields,
       - creates an 'SR' key,
       - renames journal/art identifiers,
+      - removes dots from journal abbreviations,
       - and finally reorders columns to the given schema.
     """
     try:
@@ -67,6 +68,10 @@ def scopus_csv_to_df(file_path):
             'art__no': 'article_number'  # if double underscore existed
         }, inplace=True)
 
+        # --- Remove dots from journal_abbreviation ---
+        if 'journal_abbreviation' in df.columns:
+            df['journal_abbreviation'] = df['journal_abbreviation'].astype(str).str.replace('.', '', regex=False)
+
         # --- Reorder to exact schema ---
         desired_order = [
             'author',
@@ -117,7 +122,6 @@ def scopus_csv_to_df(file_path):
             'manufacturers',
             'SR'
         ]
-        # Keep only those that actually exist in df
         existing = [c for c in desired_order if c in df.columns]
         df = df[existing]
 
