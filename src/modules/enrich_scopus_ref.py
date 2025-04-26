@@ -138,6 +138,8 @@ def fix_source_titles(
     return merged.drop(columns=['clean_abbr','journal','full_title'])
 
 
+import pandas as pd
+
 def add_SR_ref(
     df: pd.DataFrame,
     author_col: str = 'author',
@@ -148,30 +150,44 @@ def add_SR_ref(
     """
     Given a DataFrame with columns for authors, year, and journal_abbr,
     creates a new column (default name "SR_ref") of the form:
-       FIRST_AUTHOR, YEAR, JOURNAL_ABBR
+       FIRST_AUTHOR, YEAR[, JOURNAL_ABBR]
 
-    - FIRST_AUTHOR is the substring before the first ';' in the author_col.
+    - FIRST_AUTHOR is the substring before the first ';' in the author_col, with dots removed.
     - YEAR is taken as-is (converted to string).
-    - JOURNAL_ABBR is taken as-is.
+    - JOURNAL_ABBR is appended only if non-empty (also with dots removed).
     """
     df = df.copy()
-    # extract first author (everything before the first semicolon)
+    # 1) extract first author (before ';'), remove dots, trim
     df['__first'] = (
         df[author_col]
-          .fillna('')                      # avoid NaNs
-          .astype(str)                     # ensure it's a str
-          .str.split(';', n=1).str[0]      # split once, take first
-          .str.strip()                     # trim whitespace
+          .fillna('')  
+          .astype(str)
+          .str.split(';', n=1).str[0]
+          .str.replace('.', '', regex=False)
+          .str.strip()
+    )
+    # 2) prepare year and abbr as clean strings
+    df['__year'] = df[year_col].fillna('').astype(str).str.strip()
+    df['__abbr'] = (
+        df[jabbr_col]
+          .fillna('')
+          .astype(str)
+          .str.replace('.', '', regex=False)
+          .str.strip()
     )
 
-    # now compose the SR_ref
-    df[new_col] = (
-        df['__first'] + ', '
-        + df[year_col].fillna('').astype(str) + ', '
-        + df[jabbr_col].fillna('').astype(str)
-    )
+    # 3) build SR_ref by joining only non-empty pieces
+    def _make_sr(row):
+        parts = [row['__first'], row['__year']]
+        if row['__abbr']:
+            parts.append(row['__abbr'])
+        return ', '.join(parts)
 
-    return df.drop(columns='__first')
+    df[new_col] = df.apply(_make_sr, axis=1)
+
+    # 4) clean up temp columns
+    return df.drop(columns=['__first', '__year', '__abbr'])
+
 
 
 def extract_sr_mapping(scopus_references: pd.DataFrame) -> pd.DataFrame:
