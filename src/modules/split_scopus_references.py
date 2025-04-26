@@ -37,3 +37,4 @@ def split_scopus_references(df: pd.DataFrame) -> pd.DataFrame:
     out = out[out['type'] == 'article'].drop(columns='type').reset_index(drop=True)
 
     return out
+
