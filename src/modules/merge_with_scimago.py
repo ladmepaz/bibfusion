@@ -1,3 +1,5 @@
+import pandas as pd 
+
 def merge_with_scimago(scopus_df: pd.DataFrame,
                        scimago_df: pd.DataFrame) -> pd.DataFrame:
     """

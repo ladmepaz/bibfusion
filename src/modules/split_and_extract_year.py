@@ -1,3 +1,6 @@
+import pandas as pd
+import re
+
 def split_and_extract_year(df: pd.DataFrame) -> pd.DataFrame:
     """
     Input: DataFrame with ['SR','CR_ref'].

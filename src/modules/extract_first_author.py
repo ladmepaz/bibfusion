@@ -1,4 +1,5 @@
 import pandas as pd
+import re
 
 def extract_first_author(df: pd.DataFrame) -> pd.DataFrame:
     """
