@@ -123,7 +123,8 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
     # Apply the function
     author_rows = wos_authors.apply(assign_author_order, axis=1)
     authors_df = pd.concat(author_rows.tolist(), ignore_index=True)
-
+    
+    
     # Step 5: Fill missing 'AuthorFullName' with 'AuthorName' if needed
     authors_df['AuthorFullName'] = authors_df['AuthorFullName'].where(
         authors_df['AuthorFullName'] != '', authors_df['AuthorName']
@@ -308,17 +309,48 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
     authors_df['OrcidList'] = authors_df['orcid'].apply(parse_orcid_ids)
 
     # Assign ORCID IDs to authors
-    def get_author_orcid(row):
-        # Standardize the author's full name
-        author_full_name_std = standardize_name_for_matching(row['AuthorFullName'])
-        # Match the author's full name with the ORCID list
-        for orcid_entry in row['OrcidList']:
-            orcid_name_std = standardize_name_for_matching(orcid_entry['AuthorFullName'])
-            if author_full_name_std == orcid_name_std:
-                return orcid_entry['Orcid']
-        return ''
+    def split_orcid_field(orcid_field):
+        # Divide por punto y coma, y remueve espacios
+        return [entry.strip() for entry in orcid_field.split(';') if entry.strip()]
 
-    authors_df['Orcid'] = authors_df.apply(get_author_orcid, axis=1)
+    def extract_orcid_mapping(orcid_field):
+        """
+        Devuelve una lista con ORCID por autor en orden. Si un autor no tiene ORCID, se coloca ''.
+        """
+        entries = split_orcid_field(orcid_field)
+        result = []
+        for entry in entries:
+            if '/' in entry:
+                parts = entry.split('/')
+                if len(parts) >= 2:
+                    result.append(parts[-1])  # ORCID
+                else:
+                    result.append('')
+            else:
+                result.append('')  # No ORCID
+        return result
+    # Asignar ORCID a cada autor individualmente
+    def assign_orcid(row):
+        orcid_list = extract_orcid_mapping(row['orcid'])
+        index = row['AuthorOrder'] - 1
+        if index < len(orcid_list):
+            return orcid_list[int(index)]
+        else:
+            return ''
+
+    authors_df['Orcid'] = authors_df.apply(assign_orcid, axis=1)
+
+    # def get_author_orcid(row):
+    #     # Standardize the author's full name
+    #     author_full_name_std = standardize_name_for_matching(row['AuthorFullName'])
+    #     # Match the author's full name with the ORCID list
+    #     for orcid_entry in row['OrcidList']:
+    #         orcid_name_std = standardize_name_for_matching(orcid_entry['AuthorFullName'])
+    #         if author_full_name_std == orcid_name_std:
+    #             return orcid_entry['Orcid']
+    #     return ''
+
+    # authors_df['Orcid'] = authors_df.apply(get_author_orcid, axis=1)
 
     # Step 15: Parse 'researcher_id_number' to extract ResearcherIDs and map to authors
     def parse_researcher_ids(ri_entry):
@@ -361,55 +393,174 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
 
     authors_df['ResearcherID'] = authors_df.apply(get_author_researcher_id, axis=1)
 
-    # Step 16: Extract emails and assign to authors based on name matching
+    # # Step 16: Extract emails and assign to authors based on name matching
+    # def parse_emails(em_entry):
+    #     """
+    #     Parses the 'email_address' entry to extract a list of email addresses.
+    #     """
+    #     if not em_entry:
+    #         return []
+    #     # Replace double semicolons with single semicolons
+    #     em_entry = em_entry.replace(';;', ';')
+    #     # Split emails by semicolon
+    #     emails = [email.strip() for email in em_entry.split(';') if email.strip()]
+    #     return emails
+
+    # # Apply 'parse_emails' to get the list of emails
+    # authors_df['EmailList'] = authors_df['email_address'].apply(parse_emails)
+
+    # # Assign emails to authors
+    # def assign_emails(row):
+    #     author_full_name_std = standardize_name_for_matching(row['AuthorFullName'])
+    #     emails = row['EmailList']
+    #     if not emails:
+    #         return ''
+
+    #     # Extract names from emails
+    #     for email in emails:
+    #         email_username = email.split('@')[0]
+    #         email_name_parts = re.split(r'[._]', email_username)
+    #         email_name_parts = [part.lower() for part in email_name_parts if part]
+
+    #         # Build possible name combinations from email
+    #         email_name_combinations = [
+    #             ' '.join(email_name_parts),
+    #             ' '.join(reversed(email_name_parts))
+    #         ]
+
+    #         # Check if any combination matches the author's name
+    #         author_name_parts = author_full_name_std.split()
+    #         author_name = ' '.join(author_name_parts)
+    #         for email_name in email_name_combinations:
+    #             if email_name in author_name or author_name in email_name:
+    #                 return email
+    #     return ''
+
+    # Paso 16 modificado: Extraer emails
     def parse_emails(em_entry):
         """
-        Parses the 'email_address' entry to extract a list of email addresses.
+        Parsea la entrada 'email_address' para extraer una lista de emails.
         """
-        if not em_entry:
+        if not isinstance(em_entry, str) or not em_entry.strip():
             return []
-        # Replace double semicolons with single semicolons
+        # Reemplazar puntos y comas dobles con punto y coma simple
         em_entry = em_entry.replace(';;', ';')
-        # Split emails by semicolon
+        # Dividir emails por punto y coma
         emails = [email.strip() for email in em_entry.split(';') if email.strip()]
         return emails
 
-    # Apply 'parse_emails' to get the list of emails
-    authors_df['EmailList'] = authors_df['email_address'].apply(parse_emails)
+    # Crear un diccionario de emails por SR
+    sr_emails_dict = {}
+    for idx, row in wos_authors.iterrows():
+        sr = row['SR']
+        emails = parse_emails(row['email_address'])
+        sr_emails_dict[sr] = emails
 
-    # Assign emails to authors
-    def assign_emails(row):
-        author_full_name_std = standardize_name_for_matching(row['AuthorFullName'])
-        emails = row['EmailList']
+    # Función para asignar emails a autores
+    def assign_emails_improved(group_df):
+        """
+        Asigna emails a autores de un mismo artículo (SR) de forma más efectiva.
+        """
+        sr = group_df['SR'].iloc[0]
+        emails = sr_emails_dict.get(sr, [])
+        result_emails = []
+        
+        # Si no hay emails, retornar lista vacía para todos los autores
         if not emails:
-            return ''
+            return [''] * len(group_df)
+        
+        # Caso 1: Si tenemos exactamente el mismo número de emails que de autores, asignar en orden
+        if len(emails) == len(group_df):
+            return emails
+        
+        # Caso 2: Intentar hacer coincidir emails con nombres de autores
+        assigned_emails = [''] * len(group_df)
+        available_emails = emails.copy()
+        
+        for i, (_, author_row) in enumerate(group_df.iterrows()):
+            author_full_name = author_row['AuthorFullName'].lower() if isinstance(author_row['AuthorFullName'], str) else ""
+            author_name = author_row['AuthorName'].lower() if isinstance(author_row['AuthorName'], str) else ""
+            
+            # Dividir nombre del autor en partes
+            last_name = ""
+            first_name = ""
+            
+            if ',' in author_full_name:
+                name_parts = author_full_name.split(',', 1)
+                last_name = name_parts[0].strip()
+                if len(name_parts) > 1:
+                    first_name_parts = name_parts[1].strip().split()
+                    first_name = first_name_parts[0] if first_name_parts else ""
+            else:
+                name_parts = author_full_name.split()
+                last_name = name_parts[0] if name_parts else ""
+                first_name = name_parts[1] if len(name_parts) > 1 else ""
+            
+            # Buscar coincidencias entre el email y el nombre del autor
+            best_match = None
+            best_score = 0
+            
+            for email in available_emails:
+                email_username = email.split('@')[0].lower()
+                
+                # Calcular puntuación de coincidencia
+                score = 0
+                
+                # Comprobar si el apellido está en el nombre de usuario del email
+                if last_name and last_name in email_username:
+                    score += 3
+                
+                # Comprobar si la inicial del nombre está en el nombre de usuario del email
+                if first_name and first_name[0] in email_username:
+                    score += 2
+                
+                # Comprobar si hay más partes del nombre en el email
+                for part in author_full_name.replace(',', ' ').split():
+                    if len(part) > 2 and part.lower() in email_username:
+                        score += 1
+                
+                if score > best_score:
+                    best_score = score
+                    best_match = email
+            
+            # Asignar el mejor email encontrado
+            if best_score > 0 and best_match:
+                assigned_emails[i] = best_match
+                # Eliminar el email asignado de la lista para evitar duplicados
+                if best_match in available_emails:
+                    available_emails.remove(best_match)
+        
+        # Si quedan emails sin asignar y autores sin email, asignarlos secuencialmente
+        empty_indices = [i for i, email in enumerate(assigned_emails) if not email]
+        for i in empty_indices:
+            if available_emails:
+                assigned_emails[i] = available_emails.pop(0)
+        
+        return assigned_emails
 
-        # Extract names from emails
-        for email in emails:
-            email_username = email.split('@')[0]
-            email_name_parts = re.split(r'[._]', email_username)
-            email_name_parts = [part.lower() for part in email_name_parts if part]
+    # Aplicar asignación de emails por grupos
+    email_assignments = {}
+    for sr, group in authors_df.groupby('SR'):
+        emails = assign_emails_improved(group)
+        for i, (idx, _) in enumerate(group.iterrows()):
+            if i < len(emails):
+                email_assignments[idx] = emails[i]
+            else:
+                email_assignments[idx] = ''
 
-            # Build possible name combinations from email
-            email_name_combinations = [
-                ' '.join(email_name_parts),
-                ' '.join(reversed(email_name_parts))
-            ]
+    # Asignar emails al DataFrame
+    authors_df['Email'] = authors_df.index.map(lambda idx: email_assignments.get(idx, ''))
 
-            # Check if any combination matches the author's name
-            author_name_parts = author_full_name_std.split()
-            author_name = ' '.join(author_name_parts)
-            for email_name in email_name_combinations:
-                if email_name in author_name or author_name in email_name:
-                    return email
-        return ''
-
+        
+    
+    
+    #Código original
     # Apply 'assign_emails' to each row
-    authors_df['Email'] = authors_df.apply(assign_emails, axis=1)
+    #authors_df['Email'] = authors_df.apply(assign_emails_improved)), axis=1)
 
     # Step 17: Drop unnecessary columns and reset index
     authors_df = authors_df.drop(columns=['affiliations', 'AffiliationsList', 'reprint_address', 'CorrespondingAuthorName', 'orcid',
-                                          'OrcidList', 'researcher_id_number', 'ResearcherIDList', 'email_address', 'EmailList']).reset_index(drop=True)
+                                          'OrcidList', 'researcher_id_number', 'ResearcherIDList', 'email_address']).reset_index(drop=True)
 
     # Step 18: Select relevant columns
     authors_df = authors_df[['SR', 'AuthorOrder', 'AuthorName', 'AuthorFullName', 'Affiliation',
