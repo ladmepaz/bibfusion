@@ -31,12 +31,11 @@ def get_paper_info_from_doi(doi, sr_ref=None, cr_ref=None, source_title=None, ye
         data = response.json()
         
         # Extracción de información básica
-        title = data.get("title", "N/A")
+        title = data.get("title", "")
         publication_year = data.get("publication_year", "N/A")
         source = data.get("primary_location", {}).get("source", {})
         
         # Preparar lista de autores y ORCIDs
-
         author_full_names = []
         orcids = []
         affiliations = []
@@ -58,9 +57,15 @@ def get_paper_info_from_doi(doi, sr_ref=None, cr_ref=None, source_title=None, ye
             ]
             affiliations.append("; ".join(author_affiliations))
         
+        # Extracción de keywords
+        keywords_list = data.get("keywords", [])
+        keywords = [keyword.get("display_name", "") for keyword in keywords_list]
+        keywords_str = "; ".join(filter(None, keywords)) if keywords else "N/A"
+        
         # Información bibliográfica
         bibliographic_info = data.get("biblio", {})
         orcids = ["NO ORCID" if not orcid else orcid for orcid in orcids]
+        
         return {
             #"authors": "; ".join(filter(None, authors)),  # Filtra valores None
             "authors": authors,
@@ -80,6 +85,7 @@ def get_paper_info_from_doi(doi, sr_ref=None, cr_ref=None, source_title=None, ye
             "journal_issue_number": bibliographic_info.get("issue", "N/A"),
             "orcid": "; ".join(filter(None, orcids)),
             "affiliations": "; ".join(filter(None, affiliations)),
+            "keywords": keywords_str,
         }
     
     except requests.exceptions.RequestException as e:
@@ -123,14 +129,16 @@ def enrich_references_with_openalex(df):
         
         except Exception as e:
             print(f"Error procesando DOI {doi}: {e}")
+    
     enrich_references = pd.DataFrame(results)
     enrich_references['abstract'] = enrich_references['abstract'].apply(reconstruct_abstract)
-    # Reordenar columnas
+    
+    # Reordenar columnas (incluyendo keywords)
     column_order = [
         'doi', 'SR_ref', 'CR_ref',  
         'authors', 'author_full_names', 'orcid', 'affiliations',  
         'title', 'source_title', 'journal', 'journal_issue_number',  
-        'year', 'year_openalex', 'volume', 'issue', 'page'
+        'year', 'year_openalex', 'volume', 'issue', 'page', 'keywords'
     ]
 
     enrich_references = enrich_references[column_order]
