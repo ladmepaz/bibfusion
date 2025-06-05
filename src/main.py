@@ -44,12 +44,11 @@ import pandas as pd
 import os
 
 def preprocesing_df(path_wos=None,path_scopus=None):
-    PATH = "tests/files/WoS_results"
-    if not os.path.exists(PATH):
-        os.makedirs(PATH)
-
 
     if path_wos:
+        PATH = "tests/files/WoS_results"
+        if not os.path.exists(PATH):
+            os.makedirs(PATH)
         print("""
               ============================
                 Leyendo archivo de WoS...
