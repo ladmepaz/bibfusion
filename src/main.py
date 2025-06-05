@@ -44,7 +44,7 @@ import pandas as pd
 import os
 
 def preprocesing_df(path_wos=None,path_scopus=None):
-    PATH = "WoS_results"
+    PATH = "tests/files/WoS_results"
     if not os.path.exists(PATH):
         os.makedirs(PATH)
 
