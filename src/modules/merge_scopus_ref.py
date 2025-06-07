@@ -13,9 +13,9 @@ def merge_scopus_ref(
     Además:
       - Renombra en las referencias:
           'source_title' → 'journal'
-          'journal_abbr' → 'abbreviated_source_title'
+          'journal_abbr' → 'source_title'
       - Elimina 'source_title_mainarticle' y 'pages'
-      - Al final, elimina todos los puntos de la columna 'abbreviated_source_title'
+      - Al final, elimina todos los puntos de la columna 'source_title'
 
     Parameters:
     -----------
@@ -32,7 +32,7 @@ def merge_scopus_ref(
         - columna 'ismainarticle' indicando TRUE/FALSE
         - columnas renombradas y ajustadas
         - sin duplicados en 'SR', priorizando artículos principales
-        - sin puntos en 'abbreviated_source_title'
+        - sin puntos en 'source_title'
     """
     # Configurar logging
     logging.basicConfig(
@@ -53,7 +53,7 @@ def merge_scopus_ref(
     # 1b) Renombrar columnas en refs
     rename_map = {
         'source_title': 'journal',
-        'journal_abbr': 'abbreviated_source_title'
+        'journal_abbr': 'source_title'
     }
     refs = refs.rename(columns=rename_map)
     # Eliminar columnas innecesarias
@@ -75,6 +75,7 @@ def merge_scopus_ref(
 
     # 3) Eliminar duplicados en refs basado en 'SR', priorizando DOI válido
     if 'SR' in refs.columns:
+        refs['doi'] = None
         def _prioritize(group):
             valid = group['doi'].notnull() & (group['doi'] != '') & (group['doi'] != '-')
             if valid.any():
@@ -119,14 +120,14 @@ def merge_scopus_ref(
     else:
         logging.warning("No se encontró 'SR' en combinado; no se eliminaron duplicados")
 
-    # 7) Eliminar puntos en abbreviated_source_title
-    if 'abbreviated_source_title' in combined.columns:
-        combined['abbreviated_source_title'] = (
-            combined['abbreviated_source_title']
+    # 7) Eliminar puntos en source_title
+    if 'source_title' in combined.columns:
+        combined['source_title'] = (
+            combined['source_title']
             .astype(str)
             .str.replace('.', '', regex=False)
         )
-        logging.info("Eliminados puntos de 'abbreviated_source_title'")
+        logging.info("Eliminados puntos de 'source_title'")
 
     logging.info("merge_scopus_ref completado con éxito")
     return combined

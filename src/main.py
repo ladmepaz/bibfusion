@@ -9,12 +9,7 @@ from modules.merge_wos_ref import merge_wos_ref                    # Une referen
 from modules.enrich_wos_journals import enrich_wos_journals        # Añade información adicional de revistas WoS
 from modules.get_wos_author_data import get_wos_author_data        # Obtiene datos de autores desde WoS
 from modules.enrich_wos_author_data import enrich_wos_author_data  # Enriquecimiento de datos de autores WoS
-from modules.get_country_affiliation import extract_countries  # Obtiene datos de afiliación de autores desde WoS
 from modules.standarize_journal_data import standarize_journal_data  # Estandariza datos de revistas WoS
-from modules.aggregate_sr_and_attach_scimago_ids import aggregate_sr_and_attach_scimago_ids  # Agrega SR y adjunta IDs de Scimago
-from modules.fill_missing_issn_eissn_with_scimago import fill_missing_issn_eissn_with_scimago  # Rellena ISSN/EISSN faltantes con Scimago
-from modules.resolve_duplicate_sourceids import resolve_duplicate_sourceids # Resuelve IDs de fuente duplicados en WoS
-from modules.add_year_and_scimago_info import add_year_and_scimago_info
 from modules.get_country_affiliation import fill_missing_affiliations, extract_countries  # Extrae países de afiliación de autores
 from modules.get_article_entity import get_article_entity  # Obtiene entidad de artículo desde WoS
 
@@ -28,6 +23,14 @@ from modules.enrich_scopus_ref import enrich_references_with_journal_abbr  # Enr
 from modules.merge_scopus_ref import merge_scopus_ref              # Une referencias Scopus
 from modules.get_scopus_author_data import get_scopus_author_data
 from modules.enrich_scopus_author_data import enrich_scopus_author_data  # Enriquecimiento de datos de autores
+from modules.split_scopus_references import split_scopus_references  # Divide referencias Scopus en múltiples filas si es necesario
+from modules.split_and_extract_year import split_and_extract_year  # Extrae año de referencias Scopus
+from modules.extract_first_author import extract_first_author  # Extrae primer autor de referencias Scopus
+from modules.extract_journal import extract_journal  # Extrae información de revista de referencias Scopus
+from modules.merge_with_scimago import merge_with_scimago  # Une referencias Scopus con Scimago
+from modules.add_SR_ref import add_SR_ref  # Agrega SR a referencias Scopus
+from modules.extract_title import extract_title  # Extrae títulos de referencias Scopus
+from modules.enrich_with_scimago import enrich_with_scimago  # Enriquecimiento de revistas Scopus con Scimago
 # from modules.NEW_get_scopus_references import process_scopus_references
 
 # ==========================
@@ -35,9 +38,13 @@ from modules.enrich_scopus_author_data import enrich_scopus_author_data  # Enriq
 # ==========================
 
 from modules.duplicates import remove_duplicates_df                # Elimina duplicados entre WoS y Scopus
-from modules.fix_missing_journal_references import fix_missing_journal_references  # Corrige referencias de revistas faltantes
+# Parece que ya no se usa from modules.fix_missing_journal_references import fix_missing_journal_references  # Corrige referencias de revistas faltantes
 from modules.enrich_references_with_openalex import enrich_references_with_openalex       # Enriquecimiento general de referencias con OpenAlex
 from modules.unify_author_fullname_and_orcid import unify_author_fullname_and_orcid  # Unifica nombres de autores y ORCID
+from modules.aggregate_sr_and_attach_scimago_ids import aggregate_sr_and_attach_scimago_ids  # Agrega SR y adjunta IDs de Scimago
+from modules.fill_missing_issn_eissn_with_scimago import fill_missing_issn_eissn_with_scimago  # Rellena ISSN/EISSN faltantes con Scimago
+from modules.resolve_duplicate_sourceids import resolve_duplicate_sourceids # Resuelve IDs de fuente duplicados en WoS
+from modules.add_year_and_scimago_info import add_year_and_scimago_info
 
 import pandas as pd
 
@@ -134,7 +141,7 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         wos_author, articleauthor_wos, wos_author_affiliation_no_country = unify_author_fullname_and_orcid(wos_author_enriched)
         print("10. Generado wos_author, articleauthor_wos y wos_author_affiliation")
         wos_author.to_csv('tests/files/WoS_results/Author.csv', index=False)
-        articleauthor_wos.to_csv('tests/files/WoS_results/Articleauthor_wos.csv', index=False)
+        articleauthor_wos.to_csv('tests/files/WoS_results/ArticleAuthor_wos.csv', index=False)
         # wos_author_affiliation_no_country.to_csv('tests/files/WoS/10_temp_wos_author_affiliation.csv', index=False)
 
         # Get country affiliation
@@ -166,64 +173,109 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         
         # Dataframe
         scopus_df = scopus_csv_to_df(path_scopus)
-        scopus_df.to_csv('tests/files/1_temp_scopus_df.csv', index=False)
+        scopus_df.to_csv('tests/files/Scopus_tests/1_temp_scopus_df.csv', index=False)
         print("1. Dataframe de Scopus hecho")
 
         # Remove duplicates
-        scopus_df = remove_duplicates_df(scopus_df)
-        scopus_df.to_csv('tests/files/2_temp_scopus_df_removeDuplicates.csv', index=False)
+        scopus_df_2 = remove_duplicates_df(scopus_df)
+        scopus_df_2.to_csv('tests/files/Scopus_tests/2_temp_scopus_df_2.csv', index=False)
         print("2. Duplicados removidos")
 
         # Get references
         
-        # scopus_references, scopus_df = process_scopus_references(scopus_df)
-        # scopus_references.to_csv('tests/files/3_temp_scopus_references_NEW.csv', index=False)
-        # scopus_df.to_csv('tests/files/3_temp_scopus_df.csv', index=False) # Dataframe de Scopus con referencias
-        scopus_df = pd.read_csv('tests/files/3_temp_scopus_df.csv')
-        scopus_references = pd.read_csv('tests/files/3_temp_scopus_references_NEW.csv')
-        print("3. Referencias de Scopus hecha")
+        scopus_ref_1 = split_scopus_references(scopus_df_2)
+        scopus_ref_1.to_csv('tests/files/Scopus_tests/3_temp_scopus_ref.csv', index=False)
+        print("3. Referencias de Scopus extraídas")
         
-        # Enrich references with Crossref
-        enrich_scopus_ref = enrich_references_with_journal_abbr(scopus_references, 'doi')
-        enrich_scopus_ref.to_csv('tests/files/4_temp_enrich_scopus_ref.csv', index=False)
-        print("4. Referencias de Scopus Enriquecidas con Crossref")
         
-        # Merge Scopus and references
-        scopus_df_3 = merge_scopus_ref(scopus_df, enrich_scopus_ref)
-        scopus_df_3.to_csv('tests/files/5_temp_scopus_df_merged.csv', index=False)
+        scopus_ref_2 = split_and_extract_year(scopus_ref_1)
+        scopus_ref_2.to_csv('tests/files/Scopus_tests/3_temp_scopus_ref_2_split.csv', index=False)
+        print("3.1. Referencias de Scopus divididas y año extraído")
+
+
+        scopus_ref_3 = extract_first_author(scopus_ref_2)
+        scopus_ref_3.to_csv('tests/files/Scopus_tests/3_temp_scopus_ref_3_firstauthor.csv', index=False)
+        print("3.2. Primer autor extraído de las referencias de Scopus")
+
+
+        scopus_ref_4 = extract_journal(scopus_ref_3)
+        scopus_ref_4.to_csv('tests/files/Scopus_tests/3_temp_scopus_ref_4_journal.csv', index=False)
+        print("3.3. Información de revista extraída de las referencias de Scopus")
+        
+
+        scimago = pd.read_csv('tests/files/scimago/scimago.csv')
+        scopus_ref_5 = merge_with_scimago(scopus_ref_4, scimago)
+        scopus_ref_5.to_csv('tests/files/Scopus_tests/3_temp_scopus_ref_5_scimago.csv', index=False)
+
+
+        scopus_ref_6 = add_SR_ref(scopus_ref_5)
+        scopus_ref_6.to_csv('tests/files/Scopus_tests/3_temp_scopus_ref_6_SR.csv', index=False)
+        print("3.4. Referencias de Scopus enriquecidas con SR")
+
+
+        # scopus_title_1 = extract_title(scopus_ref_6)
+        # scopus_title_1.to_csv('tests/files/Scopus_tests/4_temp_scopus_title_1.csv', index=False)
+        print("4. Títulos de Scopus extraídos")
+
+
+        scopus_df_3 = merge_scopus_ref(scopus_df_2, scopus_ref_6)
+        scopus_df_3.to_csv('tests/files/Scopus_tests/5_temp_scopus_df_3_merged.csv', index=False)
         print("5. Dataframe de Scopus y referencias unidos")
-        
-        # fix missing journal references
-        scopus_df_2 = fix_missing_journal_references(scopus_df)
-        scopus_df_2.to_csv('tests/files/6_temp_scopus_df_fixmissingjournalreferences.csv', index=False)
-        print("6. Fix missing journal references")	
-        
-        # =======================================================
-        # scopus_df_3 = enrich_wos_journals(scopus_df_2, scimago)
-        # =======================================================
-        print("7. Enriched Scopus journals with Scimago")
+
+
+        scopus_journals_1 = enrich_with_scimago(scopus_df_3, scimago)
+        scopus_journals_1.to_csv('tests/files/Scopus_tests/6_temp_scopus_journals_1.csv', index=False)
+        print("6. Enriquecimiento de revistas Scopus con Scimago")
+
+        # En vez de scopus_journals_1 estaba scopus_df_3
+        scopus_df_4 = fill_missing_issn_eissn_with_scimago(scopus_journals_1, scimago)
+        scopus_df_4.to_csv('tests/files/Scopus_tests/6_temp_scopus_df_4_fillmissingjournalreferences.csv', index=False)
+        print("6.1. Rellenado de ISSN/EISSN faltantes con Scimago")
+
+
+        scopus_df_5 = aggregate_sr_and_attach_scimago_ids(scopus_df_4, scimago)
+        scopus_df_5.to_csv('tests/files/Scopus_tests/6_temp_scopus_df_5_aggregated.csv', index=False)
+        print("6.2. Agregado SR y adjuntado IDs de Scimago")
+
+
+        journal, scimago_raw = resolve_duplicate_sourceids(scopus_df_5)
+        journal.to_csv('tests/files/Scopus_tests/Journal.csv', index=False)
+        scimago_raw.to_csv('tests/files/Scopus_tests/scimago_raw.csv', index=False)
+        print("6.3. Resuelto IDs de fuente duplicados en Scopus")
+
+
+        scimagodb = add_year_and_scimago_info(scimago_raw, scopus_df_3, scimago)
+        scimagodb.to_csv('tests/files/Scopus_tests/scimagodb.csv', index=False)
+        print("7. Agregado año y datos de Scimago a scimagodb")
+
+
 
         # Get author data
         scopus_author_raw = get_scopus_author_data(scopus_df_3)
-        scopus_author_raw.to_csv('tests/files/8_temp_scopus_author_raw.csv', index=False)
+        scopus_author_raw.to_csv('tests/files/Scopus_tests/8_temp_scopus_author_raw.csv', index=False)
         print("8. Generado 'scopus_author_raw'")
+
+
 
         # Enrich author data
         scopus_author_enriched = enrich_scopus_author_data(scopus_author_raw)
-        scopus_author_enriched.to_csv('tests/files/9_temp_scopus_author_enriched.csv', index=False)
-        print("9. Enriched 'wos_author_raw'")
+        scopus_author_enriched.to_csv('tests/files/Scopus_tests/9_temp_scopus_author_enriched.csv', index=False)
+        print("9. Enriched 'scopus_author_raw'")
+
+
 
         # Merge Scopus and author data
         scopus_author, articleauthor_scopus, scopus_author_affiliation = unify_author_fullname_and_orcid(scopus_author_enriched)
-        scopus_author.to_csv('tests/files/10_temp_scopus_author.csv', index=False)
-        articleauthor_scopus.to_csv('tests/files/10_temp_articleauthor_scopus.csv', index=False)
-        scopus_author_affiliation.to_csv('tests/files/10_temp_scopus_author_affiliation.csv', index=False)
+        scopus_author.to_csv('tests/files/Scopus_tests/scopus_author.csv', index=False)
+        articleauthor_scopus.to_csv('tests/files/Scopus_tests/Articleauthor_scopus.csv', index=False)
+        scopus_author_affiliation.to_csv('tests/files/Scopus_tests/Scopus_author_affiliation.csv', index=False)
         print("10. Unificado 'wos_author_enriched'")
+
         
         # Get country affiliation
         country_codes_file = r"tests\files\country.csv"
         scopus_author_affiliation = extract_countries(scopus_author_affiliation, country_codes_file)
-        scopus_author_affiliation.to_csv('tests/files/11_temp_scopus_country.csv', index=False)
+        scopus_author_affiliation.to_csv('tests/files/Scopus_tests/11_temp_scopus_country.csv', index=False)
         print("11. Paises de afiliación extraídos")
 
         
@@ -238,4 +290,4 @@ def preprocesing_df(path_wos=None,path_scopus=None):
     return None
 
 
-preprocesing_df('tests/files/wos.txt', None)
+preprocesing_df(None, 'tests/files/scopus.csv')
