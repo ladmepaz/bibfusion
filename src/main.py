@@ -290,4 +290,4 @@ def preprocesing_df(path_wos=None,path_scopus=None):
     return None
 
 
-preprocesing_df(None, 'tests/files/scopus.csv')
+preprocesing_df(None, None)
