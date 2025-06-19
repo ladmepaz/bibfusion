@@ -1,7 +1,7 @@
 import pandas as pd
 import re
 
-def enrich_wos_author_data(scopus_authors: pd.DataFrame) -> pd.DataFrame:
+def enrich_scopus_author_data(scopus_authors: pd.DataFrame) -> pd.DataFrame:
     """
     Enriches the wos_authors dataframe by filling missing Orcid and updating AuthorFullName
     where AuthorName equals AuthorFullName with the most common AuthorFullName for that AuthorName.

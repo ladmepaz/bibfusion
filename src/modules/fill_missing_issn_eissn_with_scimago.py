@@ -10,6 +10,10 @@ def fill_missing_issn_eissn_with_scimago(wos_df: pd.DataFrame, scimago: pd.DataF
     """
     df = wos_df.copy()
     sc = scimago.copy()
+    
+    # Manejo de errores para Scopus DataFrame
+    df['issn'] = df['issn'] if 'issn' in df.columns else pd.NA
+    df['eissn'] = df['eissn'] if 'eissn' in df.columns else pd.NA
 
     # helper: pick first non-null
     def first_nonnull(s):

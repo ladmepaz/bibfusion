@@ -24,6 +24,9 @@ def aggregate_sr_and_attach_scimago_ids(wos_df, scimago):
     # 1) sanity-check inputs
     required_wos = {'SR','journal','source_title','issn','eissn'}
     required_sci = {'journal_abbr','Title','Issn','Sourceid'}
+    
+    if 'eissn' not in wos_df.columns:
+        wos_df['eissn'] = pd.NA
     if not required_wos.issubset(wos_df.columns):
         missing = required_wos - set(wos_df.columns)
         raise KeyError(f"wos_df is missing required columns: {missing}")

@@ -6,7 +6,7 @@ def enrich_with_scimago(
 ) -> pd.DataFrame:
     """
     Adds a 'Sourceid' column to scopus_df_3 by looking up in the scimago DataFrame,
-    then returns only the columns ['SR','journal','abbreviated_source_title','issn','Sourceid'].
+    then returns only the columns ['SR','journal','source_title','issn','Sourceid'].
 
     Priority of lookup:
       1) scopus_df_3['issn'] == scimago['Issn']
@@ -34,6 +34,6 @@ def enrich_with_scimago(
     # Step 2: backfill missing via journal title
     missing = df['Sourceid'].isna()
     df.loc[missing, 'Sourceid'] = df.loc[missing, 'journal'].map(title_map)
-
+    
     # Step 3: select only the desired columns
-    return df[['SR', 'journal', 'abbreviated_source_title', 'issn', 'Sourceid']].copy()
+    return df[['SR', 'journal', 'source_title', 'issn', 'Sourceid']].copy()
