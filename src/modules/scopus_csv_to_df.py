@@ -63,14 +63,13 @@ def scopus_csv_to_df(file_path):
 
         # --- Final renames for clarity ---
         df.rename(columns={
-            'journal': 'journal_title',
-            'abbreviated_source_title': 'journal_abbreviation',
+            'abbreviated_source_title': 'source_title',
             'art__no': 'article_number'  # if double underscore existed
         }, inplace=True)
 
         # --- Remove dots from journal_abbreviation ---
-        if 'journal_abbreviation' in df.columns:
-            df['journal_abbreviation'] = df['journal_abbreviation'].astype(str).str.replace('.', '', regex=False)
+        if 'source_title' in df.columns:
+            df['source_title'] = df['source_title'].astype(str).str.replace('.', '', regex=False)
 
         # --- Reorder to exact schema ---
         desired_order = [
@@ -79,8 +78,8 @@ def scopus_csv_to_df(file_path):
             'authors_id',
             'title',
             'year',
-            'journal_title',
-            'journal_abbreviation',
+            'journal',
+            'source_title',
             'volume',
             'issue',
             'article_number',
