@@ -14,15 +14,32 @@ def get_scopus_author_data(df_original):
         if pd.notna(row['author']):
             autores = row['author'].split('; ')
             
+            # Procesamos los ORCIDs (extraemos solo los números después de .org/)
+            orcids = []
+            if pd.notna(row['orcid']):
+                # Extraemos solo la parte numérica del ORCID
+                orcid_matches = re.findall(r'https?://orcid\.org/(\d{4}-\d{4}-\d{4}-\d{3}[\dX])', 
+                                         row['orcid'].lower())
+                orcids = [match.upper() for match in orcid_matches]  # Convertimos a mayúsculas
+            
             # Procesamos los nombres completos de los autores
             autores_full = []
             if pd.notna(row['author_full_names']):
-                # Extraemos los nombres completos sin el ID
-                pattern = r'([^(]+)\s*\(\d+\)'
-                autores_full = [re.search(pattern, autor.strip()).group(1).strip() if re.search(pattern, autor.strip()) else "" for autor in row['author_full_names'].split(';')]
+                for autor in row['author_full_names'].split(';'):
+                    autor = autor.strip()
+                    # Intenta extraer nombre con ID
+                    match = re.search(r'([^(]+)\s*\(\d+\)', autor)
+                    if match:
+                        autores_full.append(match.group(1).strip())
+                    else:
+                        # Si no hay ID, usa el nombre completo tal cual
+                        autores_full.append(autor)
             
-            # Procesamos las afiliaciones
+            # Procesamos las afiliaciones para la columna individual
             afiliaciones = {}
+            # Procesamos las afiliaciones para la columna combinada
+            authors_with_affiliations_list = []
+            
             if pd.notna(row['authors_with_affiliations']):
                 # Dividimos por punto y coma para separar cada autor con su afiliación
                 autores_afil = row['authors_with_affiliations'].split(';')
@@ -33,6 +50,18 @@ def get_scopus_author_data(df_original):
                         nombre_autor = partes[0].strip()
                         afiliacion = partes[1].strip() if len(partes) > 1 else 'NO AFFILIATION'
                         afiliaciones[nombre_autor] = afiliacion
+                        
+                        # Construimos el formato para authors_with_affiliations
+                        # Extraemos el apellido y las iniciales
+                        nombre_partes = nombre_autor.split()
+                        if len(nombre_partes) >= 2:
+                            apellido = nombre_partes[0].replace('.', '')
+                            iniciales = ' '.join([p[0] + '.' for p in nombre_partes[1:] if p])
+                            formatted_name = f"{apellido} {iniciales}".upper()
+                            authors_with_affiliations_list.append(f"{formatted_name}, {afiliacion}")
+            
+            # Creamos la cadena combinada de autores con afiliaciones
+            combined_authors_affiliations = "; ".join(authors_with_affiliations_list) if authors_with_affiliations_list else "NO AFFILIATIONS"
             
             # Procesamos el autor correspondiente y email
             autores_correspondencia = []
@@ -122,6 +151,11 @@ def get_scopus_author_data(df_original):
                         researcher_id = value
                         break
                 
+                # Obtenemos el ORCID (solo el número) o 'NO ORCID' si no hay
+                orcid = "NO ORCID"
+                if i < len(orcids):
+                    orcid = orcids[i]
+                
                 # Agregamos a la lista de datos
                 datos_autores.append({
                     'SR': sr,
@@ -129,8 +163,9 @@ def get_scopus_author_data(df_original):
                     'AuthorName': author_name,
                     'AuthorFullName': author_fullname,  
                     'Affiliation': affiliation,
+                    'authors_with_affiliations': combined_authors_affiliations,  # Nueva columna
                     'CorrespondingAuthor': is_corresponding,
-                    'Orcid': "",  # No hay información de ORCID
+                    'Orcid': orcid,
                     'ResearcherID': researcher_id,
                     'Email': email
                 })
@@ -138,6 +173,3 @@ def get_scopus_author_data(df_original):
     # Creamos el DataFrame final
     df_autores = pd.DataFrame(datos_autores)
     return df_autores
-
-# Para usar la función:
-# df_autores = get_scopus_author_data(df_original)
