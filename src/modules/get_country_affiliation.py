@@ -34,53 +34,65 @@ def fill_missing_affiliations(df: pd.DataFrame) -> pd.DataFrame:
     )
     return df
 
+AFFILIATION_PLACEHOLDER = "NO AFFILIATION"
+COUNTRY_PLACEHOLDER = "NO COUNTRY"
+ALIASES = {}  # Puedes definir alias si deseas mapear nombres alternativos
+
 
 def extract_countries(df: pd.DataFrame, country_codes_file: str) -> pd.DataFrame:
-    """
-    Extract country names from the 'Affiliation' column into a new 'Country' column.
-    Handles single vs. multiple affiliation parts and avoids false positives.
-
-    Args:
-        df: DataFrame with an 'Affiliation' column.
-        country_codes_file: Path to a CSV with 'code;name' rows.
-    Returns:
-        DataFrame with an added 'Country' column.
-    """
     if not os.path.exists(country_codes_file):
-        logger.error(f"Country codes file not found: {country_codes_file}")
         raise FileNotFoundError(f"Country codes file not found: {country_codes_file}")
 
-    country_df = pd.read_csv(
-        country_codes_file,
-        sep=';',
-        header=None,
-        names=['code', 'name'],
-        dtype=str
-    )
-    country_df['code'] = country_df['code'].str.strip().str.upper()
-    country_df['name'] = country_df['name'].str.strip().str.upper()
+    country_df = pd.read_csv(country_codes_file, sep=';', dtype=str)
+    country_df.columns = [col.strip().lower() for col in country_df.columns]
 
-    # Build regex patterns for full names
-    name_patterns: List[Tuple[re.Pattern, str]] = []
-    for country in sorted(country_df['name'].unique(), key=len, reverse=True):
-        name_patterns.append((re.compile(rf"\b{re.escape(country)}\b"), country))
 
-    # Build regex patterns for codes
-    code_patterns: List[Tuple[re.Pattern, str]] = []
-    for code, name in zip(country_df['code'], country_df['name']):
-        code_patterns.append((re.compile(rf"(?:,|\b){re.escape(code)}\b"), name))
+    # Aseguramos los nombres esperados
+    country_df.columns = [col.strip().lower() for col in country_df.columns]
 
-    # Set of valid full names and codes for quick lookup
-    valid_names = set(country_df['name'])
-    valid_codes = set(country_df['code'])
+    # Verificamos que existan columnas válidas
+    expected_cols = {'name', 'alpha-2', 'alpha-3'}
+    actual_cols = set(country_df.columns)
+    if not expected_cols.issubset(actual_cols):
+        raise ValueError(f"El archivo debe tener las columnas: {expected_cols}. Columnas encontradas: {actual_cols}")
+
+
+    # Normalizamos columnas
+    country_df = country_df.rename(columns={
+        'name': 'name',
+        'alpha-2': 'alpha2',
+        'alpha-3': 'alpha3'
+    })
+
+    # Convertimos a mayúsculas y eliminamos nulos
+    country_df = country_df.dropna(subset=['name', 'alpha2', 'alpha3'])
+    country_df = country_df.astype(str).apply(lambda col: col.str.strip().str.upper())
+
+    # Creamos tabla larga con todas las variantes posibles
+    long_df = pd.DataFrame({
+        'code': pd.concat([country_df['name'], country_df['alpha2'], country_df['alpha3']]),
+        'name': pd.concat([country_df['name']] * 3)
+    })
+
+    # Compilar patrones regex
+    name_patterns: List[Tuple[re.Pattern, str]] = [
+        (re.compile(rf"\b{re.escape(n)}\b"), n)
+        for n in sorted(long_df['name'].unique(), key=len, reverse=True)
+    ]
+
+    code_patterns: List[Tuple[re.Pattern, str]] = [
+        (re.compile(rf"(?:,|\b){re.escape(c)}\b"), n)
+        for c, n in zip(long_df['code'], long_df['name'])
+    ]
+
+    valid_names = set(long_df['name'])
+    valid_codes = set(long_df['code'])
 
     def extract_from_one(text: str) -> List[str]:
-        """Extract country matches -- names first, then codes as fallback."""
         if not text or text.strip().upper() == AFFILIATION_PLACEHOLDER:
             return []
-        txt = text.upper()
+        txt = str(text).upper()
         found: List[str] = []
-        # 1) Full name matches
         for pat, cname in name_patterns:
             if pat.search(txt):
                 alias = ALIASES.get(cname, cname)
@@ -88,7 +100,6 @@ def extract_countries(df: pd.DataFrame, country_codes_file: str) -> pd.DataFrame
                     found.append(alias)
         if found:
             return found
-        # 2) Code matches only if no full name
         for pat, cname in code_patterns:
             if pat.search(txt):
                 alias = ALIASES.get(cname, cname)
@@ -97,16 +108,12 @@ def extract_countries(df: pd.DataFrame, country_codes_file: str) -> pd.DataFrame
         return found
 
     def process_affiliation_cell(cell: str) -> str:
-        # Split on semicolon, but skip trivial splits
         parts = re.split(r';\s*', cell) if cell and ';' in cell else [cell]
-        # If single part, apply single-part logic
         if len(parts) == 1:
             matches = extract_from_one(parts[0])
             if not matches:
                 return COUNTRY_PLACEHOLDER
-            # If multiple, take the one appearing last in text
             if len(matches) > 1:
-                # find last by scanning positions
                 occurrences = []
                 upper = parts[0].upper()
                 for cname in matches:
@@ -115,7 +122,6 @@ def extract_countries(df: pd.DataFrame, country_codes_file: str) -> pd.DataFrame
                 return max(occurrences)[1]
             return matches[0]
 
-        # Multiple parts: filter out parts that are empty or exact country codes/names
         filtered = []
         for p in parts:
             up = p.strip().upper()
@@ -124,7 +130,6 @@ def extract_countries(df: pd.DataFrame, country_codes_file: str) -> pd.DataFrame
             filtered.append(p)
         if not filtered:
             return COUNTRY_PLACEHOLDER
-        # Extract from each remaining part and aggregate
         agg: List[str] = []
         for p in filtered:
             for cname in extract_from_one(p):
