@@ -78,7 +78,7 @@ def extract_year(cr_ref):
     if match:
         return match.group(0)
     else:
-        return '-'
+        return pd.NA
 
 def extract_journal(cr_ref, year):
     """
@@ -102,7 +102,7 @@ def extract_journal(cr_ref, year):
     # Split the reference by commas and strip whitespace
     parts = [part.strip() for part in cr_ref.split(',')]
     
-    if year != '-':
+    if pd.notna(year):
         # Assume the format: Author, Year, Journal, ...
         if len(parts) >= 3:
             return parts[2]
@@ -110,8 +110,8 @@ def extract_journal(cr_ref, year):
         # Assume the format: Author, Journal, ...
         if len(parts) >= 2:
             return parts[1]
-    
-    return '-'  # Default if journal name not found
+
+    return pd.NA  # Default if journal name not found
 
 def extract_doi(cr_ref):
     """
@@ -128,7 +128,7 @@ def extract_doi(cr_ref):
         The DOI extracted from the reference, or '-' if not found.
     """
     if not isinstance(cr_ref, str):
-        return '-'  # Return a default value for non-string entries
+        return pd.NA  # Return a default value for non-string entries
     
     # Define the DOI regex pattern
     doi_regex = r'\b10\.\d{4,9}/[-._;()/:A-Z0-9]+\b'
@@ -140,8 +140,8 @@ def extract_doi(cr_ref):
     dois = [doi.lower() for doi in dois]
     
     if not dois:
-        return '-'  # No DOI found
-    
+        return pd.NA  # No DOI found
+
     # Check if all DOIs are identical
     if all(doi == dois[0] for doi in dois):
         return dois[0]
@@ -197,10 +197,10 @@ def get_wos_references(wos_df_1):
     
     # Remove any leading/trailing whitespace from 'CR_ref'
     wos_exploded_df['CR_ref'] = wos_exploded_df['CR_ref'].str.strip()
-    
-    # Replace empty 'CR_ref' entries with '-' to indicate missing references
-    wos_exploded_df['CR_ref'] = wos_exploded_df['CR_ref'].replace('', '-')
-    
+
+    # Replace empty 'CR_ref' entries with pd.NA to indicate missing references
+    wos_exploded_df['CR_ref'] = wos_exploded_df['CR_ref'].replace('', pd.NA)
+
     # Apply the 'extract_first_author' function to create the 'authors' column
     wos_exploded_df['authors'] = wos_exploded_df['CR_ref'].apply(extract_first_author)
     
@@ -215,12 +215,18 @@ def get_wos_references(wos_df_1):
     
     # Apply the 'extract_doi' function to create the 'doi' column
     wos_exploded_df['doi'] = wos_exploded_df['CR_ref'].apply(extract_doi)
-    
-    # Remove rows where all of CR_ref, authors, year, source_title, and doi are '-'
-    wos_exploded_df = wos_exploded_df[~(wos_exploded_df[['CR_ref', 'authors', 'year', 'source_title', 'doi']] == '-').all(axis=1)]
-    
+
+    # Remove rows where all of CR_ref, authors, year, source_title, and doi are pd.NA
+    wos_exploded_df = wos_exploded_df[~(wos_exploded_df[['CR_ref', 'authors', 'year', 'source_title', 'doi']] == pd.NA).all(axis=1)]
+
     # Create 'SR_ref' by concatenating 'authors', 'year', and 'source_title'
-    wos_exploded_df['SR_ref'] = wos_exploded_df[['authors', 'year', 'source_title']].agg(', '.join, axis=1)
+    wos_exploded_df['SR_ref'] = (
+    wos_exploded_df[['authors', 'year', 'source_title']]
+    .fillna('')
+    .astype(str)
+    .agg(', '.join, axis=1)
+)
+
     
     # Select and return only the 'source_title', 'CR_ref', 'authors', 'year', 'references', 'doi', and 'SR_ref' columns
     final_df = wos_exploded_df[['source_title', 'CR_ref', 'authors', 'year', 'doi', 'SR_ref']].copy()
