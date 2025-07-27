@@ -28,7 +28,7 @@ def get_article_entity(wos_df_3):
         'funding_agency',
         'funding_details',
         'ismainarticle',
-        'total_times_cited',
+        'cited_by',
         'open_access_indicator',
         'cited_reference_count',
         'usage_count_last_180_days',

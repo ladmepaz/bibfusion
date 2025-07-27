@@ -27,7 +27,7 @@ def get_openalex_references(doi: str) -> List[str]:
         refs = data.get("referenced_works", [])
         return [f"https://openalex.org/{r.split('/')[-1]}" for r in refs if r]
     except requests.RequestException as e:
-        print(f"[get_refs] Error {clean}: {e}")
+        #print(f"[get_refs] Error {clean}: {e}")
         return []
 
 
@@ -74,7 +74,7 @@ def fetch_openalex_work(work_id: str) -> Optional[Dict[str, Any]]:
         r.raise_for_status()
         return r.json()
     except requests.RequestException as e:
-        print(f"[fetch_work] Error {work_id}: {e}")
+        #print(f"[fetch_work] Error {work_id}: {e}")
         return None
 
 
