@@ -253,26 +253,26 @@ data = {
 # ##################################
 
 
-from difflib import get_close_matches
+from rapidfuzz import process, fuzz
 
-def fill_source_title_from_scimago(df: pd.DataFrame, scimago: pd.DataFrame, cutoff=0.95) -> pd.DataFrame:
+def fill_source_title_from_scimago(df: pd.DataFrame, scimago: pd.DataFrame, cutoff=95) -> pd.DataFrame:
     """
-    Versión con coincidencia aproximada usando difflib.
-    cutoff: umbral de similitud (0-1)
+    Rellena 'source_title' en df usando coincidencia aproximada con scimago, usando rapidfuzz.
     """
-    # Preprocesamiento
-    scimago_titles = scimago['Title'].str.upper().str.strip().tolist()
-    title_to_abbr = dict(zip(scimago['Title'].str.upper().str.strip(), scimago['journal_abbr']))
-    
+    # Preprocesar
+    scimago['Title_clean'] = scimago['Title'].str.upper().str.strip()
+    title_to_abbr = dict(zip(scimago['Title_clean'], scimago['journal_abbr']))
+
+    scimago_titles = scimago['Title_clean'].tolist()
+
     df = df.copy()
     df['source_title'] = ''
-    
-    for idx, row in df.iterrows():
-        journal = str(row['journal']).upper().strip()
-        # Buscar la mejor coincidencia
-        matches = get_close_matches(journal, scimago_titles, n=1, cutoff=cutoff)
-        if matches:
-            df.at[idx, 'source_title'] = title_to_abbr[matches[0]]
+
+    for i in range(len(df)):
+        journal = str(df.at[i, 'journal']).upper().strip()
+        match = process.extractOne(journal, scimago_titles, scorer=fuzz.ratio)
+        if match and match[1] >= cutoff:
+            df.at[i, 'source_title'] = title_to_abbr[match[0]]
     
     return df
 
