@@ -148,7 +148,10 @@ def merge_scopus_ref(scopus_df: pd.DataFrame, scopus_ref_enriched: pd.DataFrame)
     # Hacer una copia de los DataFrames para evitar modificar los originales
     scopus_copy = scopus_df.copy()
     refs_copy = scopus_ref_enriched.copy()
-    
+    # Añadir columna 'ismainarticle' con TRUE para scopus_df y FALSE para scopus_ref_enriched
+    scopus_copy['ismainarticle'] = "TRUE"
+    refs_copy['ismainarticle'] = "FALSE"
+
     # Función para convertir a mayúsculas solo las columnas de texto
     def uppercase_text_columns(df):
         for col in df.columns:
