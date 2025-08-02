@@ -1,5 +1,6 @@
 def scopus_get_article_entity(scopus_df_3):
     """
+    Delete duplicate rows based on 'doi'
     Selects specific columns from the wos_df_3 DataFrame.
 
     Parameters:
@@ -8,6 +9,15 @@ def scopus_get_article_entity(scopus_df_3):
     Returns:
         pd.DataFrame: A DataFrame with the selected columns.
     """
+    
+    # Verificar duplicados en 'doi'
+    duplicados = scopus_df_3.duplicated(subset=['doi'], keep='first')
+    print(f"Se encontraron {duplicados.sum()} filas duplicadas basadas en 'doi'.")
+    
+    # Eliminar duplicados (manteniendo la primera ocurrencia)
+    scopus_df_3 = scopus_df_3.drop_duplicates(subset=['doi'], keep='first')
+
+
     columns_to_select = [
     'SR',
     'title',
@@ -55,6 +65,7 @@ def scopus_get_article_entity(scopus_df_3):
     'conference_code',
     'pubmed_id',
     'eid',
-    'link'
+    'link',
+    'ismainarticle'
     ]
     return scopus_df_3[columns_to_select]
