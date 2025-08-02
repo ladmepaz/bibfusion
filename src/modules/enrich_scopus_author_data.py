@@ -1,5 +1,4 @@
 import pandas as pd
-import re
 
 def enrich_scopus_author_data(scopus_authors: pd.DataFrame) -> pd.DataFrame:
     """
@@ -25,7 +24,7 @@ def enrich_scopus_author_data(scopus_authors: pd.DataFrame) -> pd.DataFrame:
     # Step 1: Exclude 'ANONYMOUS' authors
     authors_excl_anonymous = enriched_df[enriched_df['AuthorName'].str.upper() != 'ANONYMOUS']
     if authors_excl_anonymous.empty:
-        print("No authors found excluding 'ANONYMOUS'.")
+        # print("No authors found excluding 'ANONYMOUS'.")
         return enriched_df
     
     # Step 2: Identify unique AuthorNames (excluding 'ANONYMOUS')
@@ -38,7 +37,7 @@ def enrich_scopus_author_data(scopus_authors: pd.DataFrame) -> pd.DataFrame:
         
         # Step 3a: Determine the most common AuthorFullName for this AuthorName
         most_common_fullname = author_rows['AuthorFullName'].value_counts().idxmax()
-        print(f"AuthorName '{author}': Most common AuthorFullName is '{most_common_fullname}'")
+        # print(f"AuthorName '{author}': Most common AuthorFullName is '{most_common_fullname}'")
         
         # Step 3b: Update AuthorFullName where AuthorName equals AuthorFullName
         condition_name_equals_fullname = (
@@ -48,7 +47,7 @@ def enrich_scopus_author_data(scopus_authors: pd.DataFrame) -> pd.DataFrame:
         count_equals = condition_name_equals_fullname.sum()
         if count_equals > 0:
             enriched_df.loc[condition_name_equals_fullname, 'AuthorFullName'] = most_common_fullname
-            print(f"Updated {count_equals} rows of AuthorFullName for AuthorName '{author}'")
+            # print(f"Updated {count_equals} rows of AuthorFullName for AuthorName '{author}'")
         
         # Step 3c: Determine the most common Orcid for this AuthorName
         # Exclude 'NO ORCID' and empty entries
@@ -60,11 +59,11 @@ def enrich_scopus_author_data(scopus_authors: pd.DataFrame) -> pd.DataFrame:
         
         if not valid_orcids.empty:
             most_common_orcid = valid_orcids.value_counts().idxmax()
-            print(f"AuthorName '{author}': Most common Orcid is '{most_common_orcid}'")
+            # print(f"AuthorName '{author}': Most common Orcid is '{most_common_orcid}'")
         else:
             most_common_orcid = ''
-            print(f"AuthorName '{author}': No valid Orcid found.")
-        
+            # print(f"AuthorName '{author}': No valid Orcid found.")
+
         # Step 3d: Fill missing Orcid entries with the most common Orcid
         if most_common_orcid:
             condition_orcid_missing = (
@@ -76,9 +75,10 @@ def enrich_scopus_author_data(scopus_authors: pd.DataFrame) -> pd.DataFrame:
             rows_to_fill = condition_orcid_missing.sum()
             if rows_to_fill > 0:
                 enriched_df.loc[condition_orcid_missing, 'Orcid'] = most_common_orcid
-                print(f"Filled Orcid for {rows_to_fill} rows of AuthorName '{author}' with '{most_common_orcid}'.")
+                # print(f"Filled Orcid for {rows_to_fill} rows of AuthorName '{author}' with '{most_common_orcid}'.")
         else:
-            print(f"AuthorName '{author}': No Orcid to assign to missing entries.")
+            # print(f"AuthorName '{author}': No Orcid to assign to missing entries.")
+            None
     
     # Step 4: Ensure no trailing or leading spaces in 'AuthorName' and 'AuthorFullName'
     enriched_df['AuthorName'] = enriched_df['AuthorName'].astype(str).str.strip()

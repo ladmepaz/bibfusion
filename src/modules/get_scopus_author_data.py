@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 import re
 
 def get_scopus_author_data(df_original):
