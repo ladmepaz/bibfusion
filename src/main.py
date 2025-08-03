@@ -4,9 +4,7 @@
 
 from modules.wos_txt_to_df import wos_txt_to_df                    # Convierte archivos WoS .txt a DataFrame
 from modules.get_wos_references import get_wos_references          # Extrae referencias bibliográficas de WoS
-from modules.enrich_wos_ref import update_wos_ref_with_crossref   # Enriquecimiento de referencias WoS con Crossref
 from modules.merge_wos_ref import merge_wos_ref                    # Une referencias WoS (múltiples fuentes o duplicados)
-from modules.enrich_wos_journals import enrich_wos_journals        # Añade información adicional de revistas WoS
 from modules.get_wos_author_data import get_wos_author_data        # Obtiene datos de autores desde WoS
 from modules.enrich_wos_author_data import enrich_wos_author_data  # Enriquecimiento de datos de autores WoS
 from modules.standarize_journal_data import standarize_journal_data  # Estandariza datos de revistas WoS
@@ -18,19 +16,9 @@ from modules.get_article_entity import get_article_entity  # Obtiene entidad de 
 # ==========================
 
 from modules.scopus_csv_to_df import scopus_csv_to_df              # Convierte archivos Scopus .csv a DataFrame
-from modules.get_scopus_references import process_scopus_references    # Extrae referencias bibliográficas de Scopus
-from modules.enrich_scopus_ref import enrich_references_with_journal_abbr  # Enriquecimiento de referencias Scopus con Crossref
 from modules.merge_scopus_ref import merge_scopus_ref              # Une referencias Scopus
 from modules.get_scopus_author_data import get_scopus_author_data
 from modules.enrich_scopus_author_data import enrich_scopus_author_data  # Enriquecimiento de datos de autores
-from modules.split_scopus_references import split_scopus_references  # Divide referencias Scopus en múltiples filas si es necesario
-from modules.split_and_extract_year import split_and_extract_year  # Extrae año de referencias Scopus
-from modules.extract_first_author import extract_first_author  # Extrae primer autor de referencias Scopus
-from modules.extract_journal import extract_journal  # Extrae información de revista de referencias Scopus
-from modules.merge_with_scimago import merge_with_scimago  # Une referencias Scopus con Scimago
-from modules.add_SR_ref import add_SR_ref  # Agrega SR a referencias Scopus
-from modules.extract_title import extract_title  # Extrae títulos de referencias Scopus
-from modules.enrich_with_scimago import enrich_with_scimago  # Enriquecimiento de revistas Scopus con Scimago
 from modules.get_openalex_data import generate_references_column, generate_SR_ref, openalex_enrich_ref, fill_source_title_from_scimago
 from modules.citation_scopus import citation_scopus  # Extrae citas de Scopus
 from modules.scopus_get_article_entity import scopus_get_article_entity  # Obtiene entidad de artículo desde Scopus
@@ -42,21 +30,22 @@ from modules.fill_author_from_full_names import fill_author_from_full_names  # R
 # ==========================
 
 from modules.duplicates import remove_duplicates_df                # Elimina duplicados entre WoS y Scopus
-# Parece que ya no se usa from modules.fix_missing_journal_references import fix_missing_journal_references  # Corrige referencias de revistas faltantes
 from modules.enrich_references_with_openalex import enrich_references_with_openalex       # Enriquecimiento general de referencias con OpenAlex
 from modules.unify_author_fullname_and_orcid import unify_author_fullname_and_orcid  # Unifica nombres de autores y ORCID
 from modules.aggregate_sr_and_attach_scimago_ids import aggregate_sr_and_attach_scimago_ids  # Agrega SR y adjunta IDs de Scimago
 from modules.fill_missing_issn_eissn_with_scimago import fill_missing_issn_eissn_with_scimago  # Rellena ISSN/EISSN faltantes con Scimago
 from modules.resolve_duplicate_sourceids import resolve_duplicate_sourceids # Resuelve IDs de fuente duplicados en WoS
-from modules.add_year_and_scimago_info import add_year_and_scimago_info
+from modules.add_year_and_scimago_info import add_year_and_scimago_info # Añade año e información de Scimago a scimagodb
+from modules.to_xlsx import combinar_csv_a_excel  # Combina archivos CSV a un archivo
 import os
 import time
+
 def medir_tiempo(func):
     def wrapper(*args, **kwargs):
         inicio = time.perf_counter()
         resultado = func(*args, **kwargs)
         fin = time.perf_counter()
-        print(f"{func.__name__}' ejecutado en {fin - inicio:.2f} segundos")
+        print(f"'{func.__name__}' ejecutado en {fin - inicio:.2f} segundos")
         return resultado
     return wrapper
 import pandas as pd
@@ -84,9 +73,9 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         print("1. Dataframe de WoS hecho")
         
         # Remove duplicates
-        wos_df = remove_duplicates_df(wos_df)
+        wos_df, duplicates_removed = remove_duplicates_df(wos_df)
         wos_df.to_csv(os.path.join(output_dir, "2_temp_wos_df_removeDuplicates.csv"), index=False)
-        print("2. Duplicados removidos")
+        print(f"2. Duplicados removidos: {duplicates_removed}")
 
         # Get references
         wos_references, wos_citation = get_wos_references(wos_df)
@@ -175,6 +164,9 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         print("12. Entidad de artículo obtenida")
         article.to_csv(os.path.join(output_dir,'Article.csv'), index=False)
 
+        # Combinar CSV a Excel
+        combinar_csv_a_excel(output_dir)
+        print("13. Archivos CSV combinados a Excel")
      
     else:
         print("""
@@ -185,8 +177,8 @@ def preprocesing_df(path_wos=None,path_scopus=None):
     
     
     if path_scopus:
-        # Obtener la carpeta donde está el archivo path_wos
-        base_dir = os.path.dirname(path_wos)
+        # Obtener la carpeta donde está el archivo path_scopus
+        base_dir = os.path.dirname(path_scopus)
         output_dir = os.path.join(base_dir, "Scopus_results")
         # Crear la carpeta si no existe
         if not os.path.exists(output_dir):
@@ -205,10 +197,10 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         print("1. Dataframe de Scopus hecho")
 
         # Remove duplicates
-        scopus_df_2 = remove_duplicates_df(scopus_df)
+        scopus_df_2, duplicates_removed = remove_duplicates_df(scopus_df)
         scopus_df_2.to_csv(os.path.join(output_dir,'2_temp_scopus_df_2.csv'), index=False)
         # scopus_df_2 = pd.read_csv(os.path.join(output_dir,'2_temp_scopus_df_2.csv'))
-        print("2. Duplicados removidos")
+        print(f"2. Duplicados removidos: {duplicates_removed}")
 
         
         # extract references
@@ -235,7 +227,7 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         # Generate SR_ref
         df_with_sr = generate_SR_ref(df_enriched_1)
         df_with_sr.to_csv(os.path.join(output_dir,'6_scopus_ref_enriched.csv'), index=False)
-        df_with_sr = pd.read_csv(os.path.join(output_dir,'6_scopus_ref_enriched.csv'))
+        # df_with_sr = pd.read_csv(os.path.join(output_dir,'6_scopus_ref_enriched.csv'))
         print("6. Generada columna 'SR_ref' con formato: PRIMERAUTOR, AÑO, SOURCE_TITLE")
 
         # Generate Citation DataFrame
@@ -337,6 +329,9 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         affiliation.to_csv(os.path.join(output_dir,'Affiliation.csv'), index=False)
         print("18. Paises de afiliación extraídos")
         
+        # Save Article DataFrame
+        combinar_csv_a_excel(output_dir)
+        print("13. Archivos CSV combinados a Excel")
 
     else:
         print("""
