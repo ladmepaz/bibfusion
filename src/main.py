@@ -150,7 +150,7 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         wos_author, articleauthor_wos, wos_author_affiliation_no_country = unify_author_fullname_and_orcid(wos_author_enriched)
         print("10. Generado wos_author, articleauthor_wos y wos_author_affiliation")
         wos_author.to_csv(os.path.join(output_dir,'Author.csv'), index=False)
-        articleauthor_wos.to_csv(os.path.join(output_dir,'ArticleAuthor_wos.csv'), index=False)
+        articleauthor_wos.to_csv(os.path.join(output_dir,'ArticleAuthor.csv'), index=False)
         wos_author_affiliation_no_country.to_csv(os.path.join(output_dir,'10_temp_wos_author_affiliation.csv'), index=False)
 
         # Get country affiliation
@@ -318,7 +318,7 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         # Merge Scopus and author data
         scopus_author, articleauthor_scopus, scopus_author_affiliation_no_country = unify_author_fullname_and_orcid(scopus_author_enriched)
         scopus_author.to_csv(os.path.join(output_dir,'Author.csv'), index=False)
-        articleauthor_scopus.to_csv(os.path.join(output_dir,'ArticleAuthor_scopus.csv'), index=False)
+        articleauthor_scopus.to_csv(os.path.join(output_dir,'ArticleAuthor.csv'), index=False)
         print("17. Generado scopus_author, articleauthor_scopus y scopus_author_affiliation")
 
 
@@ -331,7 +331,7 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         
         # Save Article DataFrame
         combinar_csv_a_excel(output_dir)
-        print("13. Archivos CSV combinados a Excel")
+        print("19. Archivos CSV combinados a Excel")
 
     else:
         print("""
@@ -342,6 +342,7 @@ def preprocesing_df(path_wos=None,path_scopus=None):
     
     return None
 
-# preprocesing_df( path_wos, path_scopus)
-preprocesing_df( None, 
-                None)
+# preprocesing_df(r"path_wos", r"path_scopus")
+preprocesing_df(
+                r"C:\Users\User\Documents\Preprocesamiento\Asignatura_EscrituraDeArticulosCienciometricos_2025-1\Fitorremediacion\Helianthus annus Mn y Zn\Query 3\query3.txt", 
+                r"C:\Users\User\Documents\Preprocesamiento\Asignatura_EscrituraDeArticulosCienciometricos_2025-1\Fitorremediacion\Helianthus annus Mn y Zn\Query 3\query3.csv")
