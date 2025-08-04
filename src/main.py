@@ -7,9 +7,8 @@ from modules import get_wos_references  # Extracts bibliographic references from
 from modules import merge_wos_ref  # Merges WoS references (multiple sources or duplicates)
 from modules import get_wos_author_data  # Gets author data from WoS
 from modules import enrich_wos_author_data  # Enriches WoS author data
-from modules import standarize_journal_data  # Standardizes WoS journal data
-from modules import fill_missing_affiliations, extract_countries  # Extracts country affiliations from authors
 from modules import get_article_entity  # Gets article entity from WoS
+from modules import enrich_references_with_openalex # General reference enrichment with OpenAlex
 
 # ==========================
 #  Scopus
@@ -28,16 +27,23 @@ from modules import fill_author_from_full_names  # Fills author names from full 
 #  Comunes o compartidas
 # ==========================
 
+from modules import fill_missing_affiliations, extract_countries  # Extracts country affiliations from authors
+from modules import standarize_journal_data  # Standardizes WoS journal data
 from modules import remove_duplicates_df # Removes duplicates between WoS and Scopus
-from modules import enrich_references_with_openalex # General reference enrichment with OpenAlex
 from modules import unify_author_fullname_and_orcid # Unifies author names and ORCID
 from modules import aggregate_sr_and_attach_scimago_ids # Aggregates SR and attaches Scimago IDs
 from modules import fill_missing_issn_eissn_with_scimago # Fills missing ISSN/EISSN with Scimago
 from modules import resolve_duplicate_sourceids # Resolves duplicate source IDs in WoS
 from modules import add_year_and_scimago_info # Adds year and Scimago info to scimagodb
 from modules import combinar_csv_a_excel # Combines CSV files into an Excel file
+
+# ============================
+# utils
+# ============================
+
 import os
 import time
+import pandas as pd
 
 def medir_tiempo(func):
     def wrapper(*args, **kwargs):
@@ -47,7 +53,6 @@ def medir_tiempo(func):
         print(f"'{func.__name__}' ejecutado en {fin - inicio:.2f} segundos")
         return resultado
     return wrapper
-import pandas as pd
 
 @medir_tiempo
 def preprocesing_df(path_wos=None,path_scopus=None):
@@ -254,7 +259,6 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         #           Scimago Dataframe
         ##############################################
 
-        scimago = pd.read_csv('tests/files/scimago/scimago.csv')
 
         # Standarize journal data
         scopus_df_4 = standarize_journal_data(scopus_df_3)
