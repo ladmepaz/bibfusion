@@ -344,5 +344,6 @@ def preprocesing_df(path_wos=None,path_scopus=None):
 
 # preprocesing_df(r"path_wos", r"path_scopus")
 preprocesing_df(
-                r"C:\Users\User\Documents\Preprocesamiento\Asignatura_EscrituraDeArticulosCienciometricos_2025-1\Fitorremediacion\Helianthus annus Mn y Zn\Query 3\query3.txt", 
-                r"C:\Users\User\Documents\Preprocesamiento\Asignatura_EscrituraDeArticulosCienciometricos_2025-1\Fitorremediacion\Helianthus annus Mn y Zn\Query 3\query3.csv")
+                None, 
+                None
+                )
