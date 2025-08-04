@@ -2,35 +2,38 @@ import pandas as pd
 
 def remove_duplicates_df(dataframe: pd.DataFrame) -> pd.DataFrame:
     """
-    Remove duplicate rows based on DOI ('DI') and Title ('TI') columns from a DataFrame,
-    while preserving rows where either DOI or Title cells are empty.
+    Remove duplicate rows from a DataFrame based on the 'doi' and 'title' columns,
+    while preserving rows where both values are missing.
 
     Parameters
     ----------
     dataframe : pd.DataFrame
-        The DataFrame to process.
+        The DataFrame to process. It must contain the columns 'doi' and 'title'.
 
     Returns
     -------
     pd.DataFrame
-        A DataFrame with duplicates removed based on non-empty DOI and Title columns.
-        Rows with empty DOI and Title cells are preserved.
+        A DataFrame with duplicates removed based on non-null combinations of 'doi' and 'title'.
+        Rows where both 'doi' and 'title' are missing are preserved.
 
     Raises
     ------
     ValueError
-        If the DataFrame does not contain the required 'DI' or 'TI' columns.
+        If the DataFrame does not contain the required 'doi' or 'title' columns.
 
     Notes
     -----
-    The function first removes duplicates only where DOI ('DI') or Title ('TI') are not empty,
-    then combines these rows with rows where both DOI and Title are empty to preserve them.
+    - Rows with at least one of 'doi' or 'title' are considered for duplicate removal.
+    - Rows where both 'doi' and 'title' are missing are not deduplicated and are kept as-is.
 
     Example
     -------
-    >>> df = pd.DataFrame({'DI': ['10.1234', '10.5678', None], 'TI': ['Title1', 'Title2', None]})
-    >>> cleaned_df = remove_duplicates_df(df)
-    >>> print(cleaned_df)
+    >>> df = pd.DataFrame({
+    ...     'doi': ['10.1234', '10.1234', None],
+    ...     'title': ['Title A', 'Title A', None]
+    ... })
+    >>> clean_df = remove_duplicates_df(df)
+    >>> print(clean_df)
     """
 
     # Confirmar que existe la columna DI o title
@@ -49,8 +52,9 @@ def remove_duplicates_df(dataframe: pd.DataFrame) -> pd.DataFrame:
     df_empty = dataframe[
         dataframe['doi'].isna() & dataframe['title'].isna()
     ]
+    duplicates_removed = len(dataframe) - (len(df_cleaned) + len(df_empty))
 
     df_final = pd.concat([df_cleaned, df_empty])
 
     # Retornar el DataFrame limpio
-    return df_final
+    return df_final, duplicates_removed

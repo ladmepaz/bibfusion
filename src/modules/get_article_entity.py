@@ -1,5 +1,6 @@
 def get_article_entity(wos_df_3):
     """
+    Delete duplicate rows based on 'doi'
     Selects specific columns from the wos_df_3 DataFrame.
 
     Parameters:
@@ -8,6 +9,13 @@ def get_article_entity(wos_df_3):
     Returns:
         pd.DataFrame: A DataFrame with the selected columns.
     """
+    # Verificar duplicados en 'doi'
+    duplicados = wos_df_3.duplicated(subset=['doi'], keep='first')
+    print(f"Se encontraron {duplicados.sum()} filas duplicadas basadas en 'doi'.")
+    
+    # Eliminar duplicados (manteniendo la primera ocurrencia)
+    wos_df_3 = wos_df_3.drop_duplicates(subset=['doi'], keep='first')
+
     columns_to_select = [
         'SR',  # article_id
         'title',
