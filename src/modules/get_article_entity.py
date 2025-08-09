@@ -24,6 +24,8 @@ def get_article_entity(wos_df_3):
         'year',
         'document_type',
         'language',
+        'journal',
+        'source_title',
         'doi',
         'page_start',
         'page_end',
