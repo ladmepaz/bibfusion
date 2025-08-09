@@ -338,7 +338,9 @@ def preprocesing_df(path_wos=None,path_scopus=None):
 
     else:
         print("""
+              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
               No se ha ingresado un archivo de Scopus
+              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
               """) 
  
     
