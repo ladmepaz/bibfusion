@@ -107,7 +107,7 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         scimago = pd.read_csv('tests/files/scimago/scimago.csv')
 
         wos_df_4 = standarize_journal_data(wos_df_3)
-        wos_df_4.to_csv(os.path.join(output_dir,'5_temp_wos_df_standarized.csv'), index=False)
+        wos_df_4.to_csv(os.path.join(output_dir,'5-1_temp_wos_df_standarized.csv'), index=False)
         # wos_df_4 = pd.read_csv(os.path.join(output_dir,'5_temp_wos_df_standarized.csv'))
         print("5.1. Estandarización de datos de revistas WoS")
 
