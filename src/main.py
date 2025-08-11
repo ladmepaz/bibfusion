@@ -24,6 +24,19 @@ from modules import scopus_get_article_entity  # Gets article entity from Scopus
 from modules import fill_author_from_full_names  # Fills author names from full names
 
 # ==========================
+#  Tree of Science (ToS)
+# ==========================
+from modules import get_citation_network  # Gets the citation network (root, trunk, branches)
+from modules import clean_citation_network  # Cleans the citation network
+from modules import add_community_branch  # Adds a community branch to the citation network
+from modules import get_tos
+from modules import get_tos_df
+from modules import graph_to_df
+from modules import merge_tos_with_articles
+from modules import sort_by_tos_and_year
+from modules import add_tos_to_data_excel
+
+# ==========================
 #  Comunes o compartidas
 # ==========================
 
@@ -35,7 +48,7 @@ from modules import aggregate_sr_and_attach_scimago_ids # Aggregates SR and atta
 from modules import fill_missing_issn_eissn_with_scimago # Fills missing ISSN/EISSN with Scimago
 from modules import resolve_duplicate_sourceids # Resolves duplicate source IDs in WoS
 from modules import add_year_and_scimago_info # Adds year and Scimago info to scimagodb
-from modules import combinar_csv_a_excel # Combines CSV files into an Excel file
+from modules import export_csvs_as_excel # Combines CSV files into an Excel file
 
 # ============================
 # utils
@@ -168,10 +181,46 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         print("12. Entidad de artículo obtenida")
         article.to_csv(os.path.join(output_dir,'Article.csv'), index=False)
 
+        if path_scopus == None:
+            
+            ##############################################
+            #        Get ToS (root, trunk, branchs)
+            ##############################################
+            
+            # Get the citation network (root, trunk, branches)
+            citation_network = get_citation_network(scopus_citation)
+            print("13. network de Scopus obtenida")
+
+            # Clean the citation network
+            citation_network = clean_citation_network(citation_network)
+            print("14. network de Scopus limpiada")
+
+            # Add community branches
+            citation_network = add_community_branch(citation_network)
+            print("15. branches de la network de Scopus añadidas")
+
+            # Get ToS (root, trunk, branches)
+            tos = get_tos(citation_network)
+            print("16. ToS de la network de Scopus obtenida")
+
+            # Convert ToS to DataFrame
+            df_nodos, df_aristas, df_tos_initial = graph_to_df(tos)
+            df_nodos.to_csv(os.path.join(output_dir,'tos_df_nodes.csv'), index=False)
+            df_aristas.to_csv(os.path.join(output_dir,'tos_df_edges.csv'), index=False)
+            print("17. ToS de la network de Scopus convertida a DataFrame, nodos y aristas exportados.")
+
+            # Get ToS DataFrame
+            dataframe_tos_initial = merge_tos_with_articles(df_tos_initial, article)
+            print("18. Sacada la información de la network de Scopus de 'Article'")
+
+            # Clean and sort ToS
+            tos_df = sort_by_tos_and_year(dataframe_tos_initial)
+            tos_df.to_csv(os.path.join(output_dir,'TreeOfScience.csv'), index=False)
+
         # Combine CSV to Excel
-        combinar_csv_a_excel(output_dir)
-        print("13. Archivos CSV combinados a Excel")
-     
+        export_csvs_as_excel(output_dir)
+        print("19. Archivos CSV combinados a Excel")
+
     else:
         print("""
               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -332,9 +381,45 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         affiliation.to_csv(os.path.join(output_dir,'Affiliation.csv'), index=False)
         print("18. Paises de afiliación extraídos")
         
+        if path_wos == None:
+            
+            ##############################################
+            #        Get ToS (root, trunk, branchs)
+            ##############################################
+            
+            # Get the citation network (root, trunk, branches)
+            citation_network = get_citation_network(scopus_citation)
+            print("19. network de Scopus obtenida")
+
+            # Clean the citation network
+            citation_network = clean_citation_network(citation_network)
+            print("20. network de Scopus limpiada")
+
+            # Add community branches
+            citation_network = add_community_branch(citation_network)
+            print("21. branches de la network de Scopus añadidas")
+
+            # Get ToS (root, trunk, branches)
+            tos = get_tos(citation_network)
+            print("22. ToS de la network de Scopus obtenida")
+
+            # Convert ToS to DataFrame
+            df_nodos, df_aristas, df_tos_initial = graph_to_df(tos)
+            df_nodos.to_csv(os.path.join(output_dir,'tos_df_nodes.csv'), index=False)
+            df_aristas.to_csv(os.path.join(output_dir,'tos_df_edges.csv'), index=False)
+            print("23. ToS de la network de Scopus convertida a DataFrame, nodos y aristas exportados.")
+
+            # Get ToS DataFrame
+            dataframe_tos_initial = merge_tos_with_articles(df_tos_initial, article)
+            print("24. Sacada la información de la network de Scopus de 'Article'")
+
+            # Clean and sort ToS
+            tos_df = sort_by_tos_and_year(dataframe_tos_initial)
+            tos_df.to_csv(os.path.join(output_dir,'TreeOfScience.csv'), index=False)
+
         # Combine CSV to Excel
-        combinar_csv_a_excel(output_dir)
-        print("19. Archivos CSV combinados a Excel")
+        export_csvs_as_excel(output_dir)
+        print("25. Archivos CSV combinados a Excel")
 
     else:
         print("""
@@ -343,7 +428,13 @@ def preprocesing_df(path_wos=None,path_scopus=None):
               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
               """) 
  
-    
+    if path_wos and path_scopus:
+        print("""
+              =================================================
+               Ambos archivos de WoS y Scopus han sido procesados.
+              =================================================
+              """)
+
     
     return None
 
