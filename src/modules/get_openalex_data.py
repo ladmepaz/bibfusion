@@ -289,68 +289,82 @@ import re
 
 def generate_SR_ref(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Genera una columna 'SR_ref' con el formato: PRIMERAUTOR, AÑO, SOURCE_TITLE
+    Generate a column 'SR_ref' in format: FIRSTAUTHOR, YEAR, SOURCE_TITLE
     
-    Formato autores: "Nombre Apellido; Nombre Apellido" (ej. "Carolin Durst; Janine Viol")
+    Assumes 'authors' column contains "Name Surname; Name Surname" (semicolon-separated).
+    Returns a copy of the DataFrame with the new column 'SR_ref'.
     """
     df = df.copy()
-    
-    # 1. Función para procesar el formato "Nombre Apellido"
+
+    # 1. Process first author
     def process_author(author_str):
         if pd.isna(author_str) or not str(author_str).strip():
             return ''
-        
-        # Tomar el primer autor si hay múltiples
         first_author = str(author_str).split(';')[0].strip()
-        
         # Eliminar contenido entre paréntesis (como ORCIDs)
         first_author = re.sub(r'\(.*?\)', '', first_author).strip()
-        
-        # Extraer apellido e inicial del nombre (para formato "Nombre Apellido")
+        # Normalizar espacios
+        first_author = re.sub(r'[,\s]+', ' ', first_author).strip()
+        # Dividir en partes
         parts = first_author.split()
-        
+
+        # Eliminar guiones aislados que queden como parte del nombre
+        parts = [p for p in parts if p != '-']
+
         if len(parts) >= 2:
-            # Formato "Nombre Apellido" - tomamos el último elemento como apellido
-            last_name = parts[-1].strip().upper()
-            first_name = parts[0].strip().upper()[0] if parts[0].strip() else ''
-            return f"{last_name} {first_name}" if first_name else last_name
+            last_name = parts[-1].upper()
+            first_initial = parts[0][0].upper() if parts[0] else ''
+            return f"{last_name} {first_initial}" if first_initial else last_name
         elif parts:
-            # Si solo hay un elemento (solo apellido)
-            return parts[0].strip().upper()
+            return parts[0].upper()
         else:
             return ''
-    
+
+
+    # handle if column name is different (optional)
+    if 'authors' not in df.columns and 'author' in df.columns:
+        df['authors'] = df['author']
+
     df['first_author'] = df['authors'].apply(process_author)
-    
-    # 2. Procesar año
-    df['year_clean'] = df['year'].apply(lambda y: str(int(y)) if pd.notna(y) and str(y).isdigit() else '')
-    
-    # 3. Procesar source_title
+
+    # 2. Process year robustly
+    # convert to numeric, coerce invalids to NaN
+    df['year'] = pd.to_numeric(df['year'], errors='coerce')
+    # use nullable integer dtype (keeps NA)
+    df['year'] = df['year'].astype('Int64')
+    # create clean year string: '2001' or '' if NA
+    df['year_clean'] = df['year'].astype('Int64').astype(str).replace('<NA>', '')
+
+    # 3. Process source_title
     df['source_title_clean'] = (
-        df['source_title']
-        .fillna('')
-        .astype(str)
-        .str.replace('.', '', regex=False)
-        .str.strip()
-        .str.upper()
+        df.get('source_title', pd.Series([''] * len(df)))  # safe if no column
+          .fillna('')
+          .astype(str)
+          .str.replace('.', '', regex=False)
+          .str.strip()
+          .str.upper()
     )
-    
-    # 4. Combinar todo para crear SR_ref
-    df['SR_ref'] = (
-        df['first_author'] + ', ' + 
-        df['year_clean'] + ', ' + 
-        df['source_title_clean']
-    )
-    
-    # Limpieza final del formato
+
+    # 4. Combine parts only when present to avoid ", ,"
+    def make_sr_ref(row):
+        parts = []
+        if row.get('first_author'):
+            parts.append(row['first_author'])
+        if row.get('year_clean'):
+            parts.append(row['year_clean'])
+        if row.get('source_title_clean'):
+            parts.append(row['source_title_clean'])
+        return ', '.join(parts)
+
+    df['SR_ref'] = df.apply(make_sr_ref, axis=1)
+
+    # final cleanup: remove extra spaces, trailing commas (shouldn't be needed but safe)
     df['SR_ref'] = (
         df['SR_ref']
-        .str.replace(r'\s+,', ',', regex=True)
-        .str.replace(r',\s+', ', ', regex=True)
         .str.replace(r'\s{2,}', ' ', regex=True)
         .str.strip()
         .str.rstrip(',')
     )
-    
-    # Eliminar columnas temporales
+
+    # drop temporary cols
     return df.drop(columns=['first_author', 'year_clean', 'source_title_clean'], errors='ignore')

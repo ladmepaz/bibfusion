@@ -19,6 +19,9 @@ def get_article_entity(wos_df_3):
     columns_to_select = [
         'SR',  # article_id
         'title',
+        'author',
+        'author_full_names',
+        'orcid',
         'abstract',
         'article_number',
         'year',
