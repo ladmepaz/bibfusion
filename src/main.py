@@ -69,14 +69,19 @@ def medir_tiempo(func):
 
 @medir_tiempo
 def preprocesing_df(path_wos=None,path_scopus=None):
-
+    """
+    Preprocessing the DataFrames of WoS and Scopus.
+    """
     if path_wos:
-        # Obtain the folder where the path_wos file is located
-        base_dir = os.path.dirname(path_wos)
+        if isinstance(path_wos, str):
+            path_wos = [path_wos]
+
+        # Take the first file to obtain the base folder (they are all in the same folder)
+        base_dir = os.path.dirname(path_wos[0])
         output_dir = os.path.join(base_dir, "WoS_results")
+
         # Create the folder if it doesn't exist
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
         
         print("""
               ============================
@@ -181,14 +186,13 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         print("12. Entidad de artículo obtenida")
         article.to_csv(os.path.join(output_dir,'Article.csv'), index=False)
 
-        if path_scopus == None:
             
         ##############################################
         #        Get ToS (root, trunk, branchs)
         ##############################################
         
         # Get the citation network (root, trunk, branches)
-        citation_network = get_citation_network(scopus_citation)
+        citation_network = get_citation_network(wos_citation)
         print("13. network de Scopus obtenida")
 
         # Clean the citation network
@@ -381,7 +385,6 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         affiliation.to_csv(os.path.join(output_dir,'Affiliation.csv'), index=False)
         print("18. Paises de afiliación extraídos")
         
-        if path_wos == None:
             
         ##############################################
         #        Get ToS (root, trunk, branchs)
@@ -438,7 +441,7 @@ def preprocesing_df(path_wos=None,path_scopus=None):
     
     return None
 
-# preprocesing_df(r"path_wos", r"path_scopus")
+# preprocesing_df(r"path_wos" or [r"path_wos",r"path_wos_2"], r"path_scopus")
 preprocesing_df(
                 None, 
                 None
