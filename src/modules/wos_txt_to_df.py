@@ -2,7 +2,7 @@ import pandas as pd
 import re
 import os
 
-def wos_txt_to_df(file_path):
+def wos_txt_to_df(file_paths):
     """
     Converts a Web of Science (WoS) text file into a pandas DataFrame with specified formatting and columns.
 
@@ -17,180 +17,190 @@ def wos_txt_to_df(file_path):
         ValueError: If the file is not a valid .txt file or does not conform to the expected WoS format.
     """
     try:
-        # Check if the file exists
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"The file '{file_path}' does not exist.")
+        if isinstance(file_paths, str):
+            file_paths = [file_paths]  # Convert single path to list
+            
+        all_records = []  # To store data from all files
+        
+        for file_path in file_paths:
+            # Check if the file exists
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"The file '{file_path}' does not exist.")
 
-        # Check if the file has a .txt extension
-        _, file_extension = os.path.splitext(file_path)
-        if file_extension.lower() != '.txt':
-            raise ValueError(f"The file '{file_path}' is not a .txt file.")
+            # Check if the file has a .txt extension
+            _, file_extension = os.path.splitext(file_path)
+            if file_extension.lower() != '.txt':
+                raise ValueError(f"The file '{file_path}' is not a .txt file.")
 
-        # Open the file and read the first few lines to validate content
-        with open(file_path, 'r', encoding='utf-8-sig') as f:
-            first_lines = [next(f).strip() for _ in range(5)]
-            # Check for expected WoS markers
-            if not any(line.startswith('FN ') for line in first_lines) or not any(line.startswith('VR ') for line in first_lines):
-                raise ValueError(f"The file '{file_path}' does not appear to be a valid Web of Science (WoS) text file.")
+            # Open the file and read the first few lines to validate content
+            with open(file_path, 'r', encoding='utf-8-sig') as f:
+                first_lines = [next(f).strip() for _ in range(5)]
+                # Check for expected WoS markers
+                if not any(line.startswith('FN ') for line in first_lines) or not any(line.startswith('VR ') for line in first_lines):
+                    raise ValueError(f"The file '{file_path}' does not appear to be a valid Web of Science (WoS) text file.")
 
-        # Re-open the file to start processing from the beginning
-        with open(file_path, 'r', encoding='utf-8-sig') as f:
-            # Initialize variables
-            records = []
-            current_record = {}
-            current_field = None
+            # Re-open the file to start processing from the beginning
+            with open(file_path, 'r', encoding='utf-8-sig') as f:
+                # Initialize variables
+                records = []
+                current_record = {}
+                current_field = None
 
-            # Define fields that can have multiple entries
-            multiple_fields = {'AU', 'AF', 'CR', 'ID', 'DE', 'C1', 'C3', 'EM', 'RI', 'OI', 'FX', 'RP'}
+                # Define fields that can have multiple entries
+                multiple_fields = {'AU', 'AF', 'CR', 'ID', 'DE', 'C1', 'C3', 'EM', 'RI', 'OI', 'FX', 'RP'}
 
-            # Fields to ignore
-            ignore_fields = {'FN', 'VR'}
+                # Fields to ignore
+                ignore_fields = {'FN', 'VR'}
 
-            # Fields to convert to uppercase
-            uppercase_fields = {'AB', 'AF', 'AU', 'C1', 'CR', 'DE', 'DT', 'EM', 'FU', 'FX', 'JI', 'J9', 'LA', 'OA',
-                                'OI', 'PT', 'RI', 'RP', 'SC', 'SP', 'TI', 'WC', 'WE'}
+                # Fields to convert to uppercase
+                uppercase_fields = {'AB', 'AF', 'AU', 'C1', 'CR', 'DE', 'DT', 'EM', 'FU', 'FX', 'JI', 'J9', 'LA', 'OA',
+                                    'OI', 'PT', 'RI', 'RP', 'SC', 'SP', 'TI', 'WC', 'WE'}
 
-            for line in f:
-                line = line.rstrip('\n')
-                if not line.strip():
-                    continue  # Skip empty lines
+                for line in f:
+                    line = line.rstrip('\n')
+                    if not line.strip():
+                        continue  # Skip empty lines
 
-                if line == 'ER':
-                    # End of record
-                    records.append(current_record)
-                    current_record = {}
-                    current_field = None
-                    continue  # Move to the next line
+                    if line == 'ER':
+                        # End of record
+                        if current_record:  # Only add if record is not empty
+                            records.append(current_record)
+                        current_record = {}
+                        current_field = None
+                        continue  # Move to the next line
 
-                if line[:2] in ignore_fields and line[2] == ' ':
-                    # Ignore these fields
-                    current_field = None
-                    continue
-
-                # Check for new field
-                match = re.match(r'^([A-Z0-9]{2}) (.*)', line)
-                if match:
-                    current_field, value = match.groups()
-                    value = value.strip()
-
-                    if current_field in ignore_fields:
+                    if line[:2] in ignore_fields and line[2] == ' ':
+                        # Ignore these fields
                         current_field = None
                         continue
 
-                    if current_field in multiple_fields:
-                        # Fields that can have multiple entries
-                        if current_record.get(current_field):
-                            current_record[current_field].append(value)
-                        else:
-                            current_record[current_field] = [value]
-                    else:
-                        current_record[current_field] = value
-                else:
-                    # Continuation of the previous field
-                    value = line.strip()
-                    if current_field:
+                    # Check for new field
+                    match = re.match(r'^([A-Z0-9]{2}) (.*)', line)
+                    if match:
+                        current_field, value = match.groups()
+                        value = value.strip()
+
+                        if current_field in ignore_fields:
+                            current_field = None
+                            continue
+
                         if current_field in multiple_fields:
-                            # Append as a new entry
-                            current_record[current_field].append(value)
+                            # Fields that can have multiple entries
+                            if current_record.get(current_field):
+                                current_record[current_field].append(value)
+                            else:
+                                current_record[current_field] = [value]
                         else:
-                            current_record[current_field] += ' ' + value
-
-        # Handle the last record if the file does not end with 'ER'
-        if current_record:
-            records.append(current_record)
-
-        # Process records
-        for record in records:
-            # Process 'AU' field to desired format
-            if 'AU' in record:
-                processed_authors = []
-                for name in record['AU']:
-                    # Reformat the name 'Last, F' -> 'LAST F'
-                    parts = name.split(', ')
-                    if len(parts) == 2:
-                        lastname, firstname = parts
-                        processed_name = f"{lastname.upper()} {firstname}"
+                            current_record[current_field] = value
                     else:
-                        processed_name = name.upper()
-                    processed_authors.append(processed_name)
-                # Assign back to 'AU' field
-                record['AU'] = ';'.join(processed_authors)
+                        # Continuation of the previous field
+                        value = line.strip()
+                        if current_field:
+                            if current_field in multiple_fields:
+                                # Append as a new entry
+                                current_record[current_field].append(value)
+                            else:
+                                current_record[current_field] += ' ' + value
 
-            # Process 'AF' field to desired format
-            if 'AF' in record:
-                processed_full_names = []
-                for name in record['AF']:
-                    # Reformat the name 'Lastname, Firstname' -> 'LASTNAME, FIRSTNAME'
-                    processed_name = name.upper()
-                    processed_full_names.append(processed_name)
-                # Assign back to 'AF' field
-                record['AF'] = ';'.join(processed_full_names)
+                # Handle the last record if the file does not end with 'ER'
+                if current_record:
+                    records.append(current_record)
 
-            # Process 'CR' field to desired format
-            if 'CR' in record:
-                processed_references = []
-                for ref in record['CR']:
-                    processed_ref = ref.upper()
-                    processed_references.append(processed_ref)
-                # Assign back to 'CR' field
-                record['CR'] = '; '.join(processed_references)
+                # Process records
+                for record in records:
+                    # Process 'AU' field to desired format
+                    if 'AU' in record:
+                        processed_authors = []
+                        for name in record['AU']:
+                            # Reformat the name 'Last, F' -> 'LAST F'
+                            parts = name.split(', ')
+                            if len(parts) == 2:
+                                lastname, firstname = parts
+                                processed_name = f"{lastname.upper()} {firstname}"
+                            else:
+                                processed_name = name.upper()
+                            processed_authors.append(processed_name)
+                        # Assign back to 'AU' field
+                        record['AU'] = ';'.join(processed_authors)
 
-            # Process 'C1' field to uppercase
-            if 'C1' in record:
-                processed_addresses = []
-                for address in record['C1']:
-                    processed_address = address.upper()
-                    processed_addresses.append(processed_address)
-                # Assign back to 'C1' field
-                record['C1'] = '; '.join(processed_addresses)
+                    # Process 'AF' field to desired format
+                    if 'AF' in record:
+                        processed_full_names = []
+                        for name in record['AF']:
+                            # Reformat the name 'Lastname, Firstname' -> 'LASTNAME, FIRSTNAME'
+                            processed_name = name.upper()
+                            processed_full_names.append(processed_name)
+                        # Assign back to 'AF' field
+                        record['AF'] = ';'.join(processed_full_names)
 
-            # Process 'C3' field to uppercase
-            if 'C3' in record:
-                processed_addresses = []
-                for address in record['C3']:
-                    processed_address = address.upper()
-                    processed_addresses.append(processed_address)
-                # Assign back to 'C3' field
-                record['C3'] = '; '.join(processed_addresses)
+                    # Process 'CR' field to desired format
+                    if 'CR' in record:
+                        processed_references = []
+                        for ref in record['CR']:
+                            processed_ref = ref.upper()
+                            processed_references.append(processed_ref)
+                        # Assign back to 'CR' field
+                        record['CR'] = '; '.join(processed_references)
 
-            # Process 'DE' field to uppercase
-            if 'DE' in record:
-                processed_descriptors = []
-                for descriptor in record['DE']:
-                    processed_descriptor = descriptor.upper()
-                    processed_descriptors.append(processed_descriptor)
-                # Assign back to 'DE' field
-                record['DE'] = '; '.join(processed_descriptors)
+                    # Process 'C1' field to uppercase
+                    if 'C1' in record:
+                        processed_addresses = []
+                        for address in record['C1']:
+                            processed_address = address.upper()
+                            processed_addresses.append(processed_address)
+                        # Assign back to 'C1' field
+                        record['C1'] = '; '.join(processed_addresses)
 
-            # Process additional fields to uppercase
-            for field in uppercase_fields:
-                if field in record and field not in {'AU', 'AF', 'CR', 'C1', 'C3', 'DE'}:
-                    if field in multiple_fields and isinstance(record[field], list):
-                        # Multiple-entry field
-                        processed_values = [value.upper() for value in record[field]]
-                        record[field] = '; '.join(processed_values)
+                    # Process 'C3' field to uppercase
+                    if 'C3' in record:
+                        processed_addresses = []
+                        for address in record['C3']:
+                            processed_address = address.upper()
+                            processed_addresses.append(processed_address)
+                        # Assign back to 'C3' field
+                        record['C3'] = '; '.join(processed_addresses)
+
+                    # Process 'DE' field to uppercase
+                    if 'DE' in record:
+                        processed_descriptors = []
+                        for descriptor in record['DE']:
+                            processed_descriptor = descriptor.upper()
+                            processed_descriptors.append(processed_descriptor)
+                        # Assign back to 'DE' field
+                        record['DE'] = '; '.join(processed_descriptors)
+
+                    # Process additional fields to uppercase
+                    for field in uppercase_fields:
+                        if field in record and field not in {'AU', 'AF', 'CR', 'C1', 'C3', 'DE'}:
+                            if field in multiple_fields and isinstance(record[field], list):
+                                # Multiple-entry field
+                                processed_values = [value.upper() for value in record[field]]
+                                record[field] = '; '.join(processed_values)
+                            else:
+                                # Single-entry field
+                                record[field] = record[field].upper()
+
+                    # Flatten other fields
+                    for key, value in record.items():
+                        if key not in {'AU', 'AF', 'CR', 'C1', 'C3', 'DE'} | uppercase_fields and isinstance(value, list):
+                            record[key] = '; '.join(value)
+
+                    # Add 'DB' field with value 'WOS'
+                    record['DB'] = 'WOS'
+
+                    # Create 'SR' field
+                    if 'AU' in record and 'PY' in record and 'J9' in record:
+                        first_author = record['AU'].split(';')[0]
+                        sr_value = f"{first_author}, {record['PY']}, {record['J9']}"
+                        record['SR'] = sr_value
                     else:
-                        # Single-entry field
-                        record[field] = record[field].upper()
+                        record['SR'] = ''
 
-            # Flatten other fields
-            for key, value in record.items():
-                if key not in {'AU', 'AF', 'CR', 'C1', 'C3', 'DE'} | uppercase_fields and isinstance(value, list):
-                    record[key] = '; '.join(value)
+                # Add records from this file to all_records
+                all_records.extend(records)
 
-            # Add 'DB' field with value 'WOS'
-            record['DB'] = 'WOS'
-
-            # Create 'SR' field
-            if 'AU' in record and 'PY' in record and 'J9' in record:
-                first_author = record['AU'].split(';')[0]
-                sr_value = f"{first_author}, {record['PY']}, {record['J9']}"
-                record['SR'] = sr_value
-            else:
-                record['SR'] = ''
-
-        # Create DataFrame from records
-        df = pd.DataFrame(records)
+        # Create DataFrame from all records
+        df = pd.DataFrame(all_records)
 
         # Desired columns in the specified order
         desired_columns = ['AU', 'AF', 'CR', 'AB', 'AR', 'BP', 'C1', 'C3', 'CL', 'CT', 'CY', 'DA', 'DE', 'DI', 'DT',
@@ -219,8 +229,6 @@ def wos_txt_to_df(file_path):
             'WE': 'web_of_science_entry', 'Z9': 'cited_by', 'DB': 'source'
         }
        
-        
-
         df = df[desired_columns]
         df.rename(columns=rename_columns, inplace=True)
         df.drop(columns=['ER', 'EF', 'TC'], inplace=True)
@@ -239,8 +247,9 @@ def wos_txt_to_df(file_path):
 
 if __name__ == '__main__':
     # Example usage
-    df = wos_txt_to_df('wos.txt')
+    df = wos_txt_to_df(["savedrecs.txt","savedrecs_2.txt"])
     if df is not None:
+        print(f"DataFrame created with {len(df)} records")
         print(df.head())
     else:
         print("Failed to create DataFrame from the given file.")
