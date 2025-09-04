@@ -247,8 +247,11 @@ def preprocesing_df(path_wos=None,path_scopus=None):
               ===============================
               """)
         
+        # Load Scimago df
+        scimago = pd.read_csv('tests/files/scimago/scimago.csv')
+        
         # Dataframe
-        scopus_df = scopus_csv_to_df(path_scopus)
+        scopus_df = scopus_csv_to_df(path_scopus, scimago)
         scopus_df.to_csv(os.path.join(output_dir,'1_temp_scopus_df.csv'), index=False)
         # scopus_df = pd.read_csv(os.path.join(output_dir,'1_temp_scopus_df.csv'))
         print("1. Dataframe de Scopus hecho")
@@ -274,7 +277,6 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         print("4. Enriquecimiento de referencias de Scopus con OpenAlex hecho")
 
 
-        scimago = pd.read_csv('tests/files/scimago/scimago.csv')
 
         df_enriched_1 = fill_source_title_from_scimago(enrich_ref, scimago)
         df_enriched_1.to_csv(os.path.join(output_dir,'5_temp_extraction_linksref_openalex_sourcetitle.csv'), index=False)
