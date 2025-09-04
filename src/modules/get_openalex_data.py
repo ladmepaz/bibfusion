@@ -79,7 +79,7 @@ def fetch_openalex_work(work_id: str) -> Optional[Dict[str, Any]]:
 
 
 def extract_work_info(w: Dict[str, Any]) -> Dict[str, Any]:
-    if not w:  # Si w es None o vacío
+    if not w:
         return {
             'title': None,
             'doi': None,
@@ -94,14 +94,12 @@ def extract_work_info(w: Dict[str, Any]) -> Dict[str, Any]:
             'authors': None,
             'authors_with_affiliations': None,
             'orcids': None,
-            'cited_by': None
+            'cited_by': None,
+            'keywords': None  # 🔹 Añadido
         }
 
-    # Protege todo lo que pueda ser None
     doi_raw = w.get('doi')
     bib = w.get('biblio') or {}
-    
-    # Manejo seguro de primary_location
     primary_location = w.get('primary_location') or {}
     source = primary_location.get('source') or {}
     
@@ -109,17 +107,13 @@ def extract_work_info(w: Dict[str, Any]) -> Dict[str, Any]:
     inverted = w.get('abstract_inverted_index')
     abstract_text = reconstruct_abstract(inverted) if inverted else None
 
-    # Extracción de autores, ORCIDs y afiliaciones con países
-    auths = []
-    orcids = []
-    authors_with_affiliations = []
-    
+    # --- Autores ---
+    auths, orcids, authors_with_affiliations = [], [], []
     for a in w.get('authorships', []) or []:
         author = a.get('author') or {}
         name = author.get('display_name')
         orcid = author.get('orcid')
         
-        # Procesar nombre para formato corto (Apellido Inicial)
         if name:
             name_parts = name.split()
             if len(name_parts) >= 2:
@@ -130,22 +124,23 @@ def extract_work_info(w: Dict[str, Any]) -> Dict[str, Any]:
             auths.append(name)
             orcids.append(orcid if orcid else '')
             
-            # Procesar afiliaciones y países
             institutions_info = []
             for inst in (a.get('institutions') or []):
                 inst_name = inst.get('display_name')
                 country = inst.get('country_code')
-                
                 if inst_name:
-                    # Añadir país si está disponible
-                    if country:
-                        inst_info = f"{inst_name}, {country.upper()}"
-                    else:
-                        inst_info = inst_name
+                    inst_info = f"{inst_name}, {country.upper()}" if country else inst_name
                     institutions_info.append(inst_info)
-            
             affiliation = '; '.join(institutions_info) if institutions_info else 'NO AFFILIATION'
             authors_with_affiliations.append(f"{short_name}, {affiliation}")
+
+    # --- Keywords ---
+    keywords = []
+    for kw in w.get('keywords', []) or []:
+        kw_name = kw.get('display_name')
+        if kw_name:
+            keywords.append(kw_name)
+    keywords_str = '; '.join(keywords) if keywords else None
 
     return {
         'title': w.get('title'),
@@ -161,8 +156,10 @@ def extract_work_info(w: Dict[str, Any]) -> Dict[str, Any]:
         'authors': '; '.join(auths) if auths else None,
         'authors_with_affiliations': '; '.join(authors_with_affiliations) if authors_with_affiliations else None,
         'orcids': '; '.join(orcids) if orcids else None,
-        'cited_by': w.get('cited_by_count')
+        'cited_by': w.get('cited_by_count'),
+        'author_keywords': keywords_str
     }
+
 
 
 def openalex_enrich_ref(df: pd.DataFrame) -> pd.DataFrame:
@@ -207,7 +204,8 @@ def openalex_enrich_ref(df: pd.DataFrame) -> pd.DataFrame:
                     'authors': None,
                     'authors_with_affiliations': None,
                     'orcids': None,
-                    'cited_by': None
+                    'cited_by': None,
+                    'author_keywords': None
                 })
                 continue
                 
@@ -226,7 +224,7 @@ def openalex_enrich_ref(df: pd.DataFrame) -> pd.DataFrame:
         'SR_original', 'doi_original', 'openalex_id', 'openalex_url', 
         'authors', 'authors_with_affiliations', 'orcids',
         'title', 'doi', 'journal', 'source_title', 'volume', 'issue', 'page',
-        'journal_issue_number', 'abstract', 'year', 'cited_by'
+        'journal_issue_number', 'abstract', 'year', 'cited_by', 'author_keywords'
     ]
     return enriched[[c for c in cols if c in enriched.columns]]
 

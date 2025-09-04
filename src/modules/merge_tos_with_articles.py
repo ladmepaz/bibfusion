@@ -15,7 +15,7 @@ def merge_tos_with_articles(df_tos, df_article):
     # Hacemos un merge asegurándonos que es un left join (mantener todos los SR de df_tos)
     df_result = pd.merge(
         df_tos,
-        df_article[['SR', 'author', 'title', 'year', 'doi']],
+        df_article[['SR', 'author', 'title', 'year', 'doi', 'author_keywords']],
         on='SR',
         how='left'
     )
