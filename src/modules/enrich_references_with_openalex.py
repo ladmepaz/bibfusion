@@ -107,7 +107,7 @@ def enrich_references_with_openalex(df):
     for index, row in df.iterrows():
         # Verifica si tiene un DOI
         if 'doi' not in row or pd.isna(row['doi']) or row['doi'] == '' or row['doi'] == '-':
-            print(f"Fila {index}: DOI no encontrado o vacío, saltando...")
+            # print(f"Fila {index}: DOI no encontrado o vacío, saltando...")
             results.append(row.to_dict())  # Convierte la fila a diccionario y la agrega
             continue
             

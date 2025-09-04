@@ -62,30 +62,6 @@ def get_scopus_author_data(df_original):
             # Creamos la cadena combinada de autores con afiliaciones
             combined_authors_affiliations = "; ".join(authors_with_affiliations_list) if authors_with_affiliations_list else "NO AFFILIATIONS"
             
-            # Procesamos el autor correspondiente y email
-            autores_correspondencia = []
-            emails_por_autor = {}
-            
-            if pd.notna(row['correspondence_address']):
-                # Dividimos por punto y coma para separar cada parte
-                partes = row['correspondence_address'].split(';')
-                
-                # Extraemos información de correspondencia
-                autor_actual = None
-                for parte in partes:
-                    parte = parte.strip()
-                    
-                    # Comprobamos si es un autor (generalmente inicia con inicial y punto)
-                    autor_match = re.match(r'^([A-Z]\.\s+[A-Z]+)', parte)
-                    if autor_match:
-                        autor_actual = autor_match.group(1).strip()
-                        autores_correspondencia.append(autor_actual)
-                    
-                    # Comprobamos si es un email
-                    email_match = re.search(r'EMAIL:\s*([^;\s]+)', parte, re.IGNORECASE)
-                    if email_match and autor_actual:
-                        emails_por_autor[autor_actual] = email_match.group(1).strip()
-            
             # Procesamos los IDs de investigador
             researcher_ids = {}
             if pd.notna(row['author_full_names']):
@@ -113,36 +89,6 @@ def get_scopus_author_data(df_original):
                         affiliation = afiliaciones[key]
                         break
                 
-                # Creamos versiones inversa del nombre (APELLIDO I. -> I. APELLIDO) para comparar con autores_correspondencia
-                partes_nombre = author_name.split(' ')
-                if len(partes_nombre) >= 2:
-                    apellido = partes_nombre[0].replace('.', '')
-                    iniciales = ' '.join(partes_nombre[1:])
-                    nombre_invertido = f"{iniciales} {apellido}"
-                    
-                    # Verificamos todas las posibles formas del nombre
-                    is_corresponding = False
-                    email = ""
-                    
-                    for autor_corr in autores_correspondencia:
-                        # Normalizamos para comparación
-                        autor_norm = autor_corr.replace(' ', '').replace('.', '').upper()
-                        author_name_norm = author_name.replace(' ', '').replace('.', '').upper()
-                        nombre_invertido_norm = nombre_invertido.replace(' ', '').replace('.', '').upper()
-                        
-                        # Comparamos de varias formas
-                        if (autor_norm in author_name_norm or 
-                            author_name_norm in autor_norm or 
-                            autor_norm in nombre_invertido_norm or 
-                            nombre_invertido_norm in autor_norm):
-                            is_corresponding = True
-                            if autor_corr in emails_por_autor:
-                                email = emails_por_autor[autor_corr]
-                            break
-                else:
-                    is_corresponding = False
-                    email = ""
-                
                 # Obtenemos el ResearcherID
                 researcher_id = ""
                 for key, value in researcher_ids.items():
@@ -163,10 +109,10 @@ def get_scopus_author_data(df_original):
                     'AuthorFullName': author_fullname,  
                     'Affiliation': affiliation,
                     'authors_with_affiliations': combined_authors_affiliations,  # Nueva columna
-                    'CorrespondingAuthor': is_corresponding,
+                    'CorrespondingAuthor': False,  # Siempre será False sin correspondence_address
                     'Orcid': orcid,
                     'ResearcherID': researcher_id,
-                    'Email': email
+                    'Email': ''  # Siempre vacío sin correspondence_address
                 })
     
     # Creamos el DataFrame final
