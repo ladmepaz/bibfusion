@@ -126,7 +126,7 @@ def preprocesing_df(path_wos=None,path_scopus=None):
 
         wos_df_4 = standarize_journal_data(wos_df_3)
         wos_df_4.to_csv(os.path.join(output_dir,'5-1_temp_wos_df_standarized.csv'), index=False)
-        # wos_df_4 = pd.read_csv(os.path.join(output_dir,'5_temp_wos_df_standarized.csv'))
+        # wos_df_4 = pd.read_csv(os.path.join(output_dir,'5-1_temp_wos_df_standarized.csv'))
         print("5.1. Estandarización de datos de revistas WoS")
 
         # fill missing issn and eissn with Scimago
@@ -205,17 +205,17 @@ def preprocesing_df(path_wos=None,path_scopus=None):
 
         # Get ToS (root, trunk, branches)
         tos = get_tos(citation_network)
-        print("16. ToS de la network de Scopus obtenida")
+        print("16. ToS de la network de WoS obtenida")
 
         # Convert ToS to DataFrame
         df_nodos, df_aristas, df_tos_initial = graph_to_df(tos)
         df_nodos.to_csv(os.path.join(output_dir,'tos_df_nodes.csv'), index=False)
         df_aristas.to_csv(os.path.join(output_dir,'tos_df_edges.csv'), index=False)
-        print("17. ToS de la network de Scopus convertida a DataFrame, nodos y aristas exportados.")
+        print("17. ToS de la network de WoS convertida a DataFrame, nodos y aristas exportados.")
 
         # Get ToS DataFrame
         dataframe_tos_initial = merge_tos_with_articles(df_tos_initial, article)
-        print("18. Sacada la información de la network de Scopus de 'Article'")
+        print("18. Sacada la información de la network de WoS de 'Article'")
 
         # Clean and sort ToS
         tos_df = sort_by_tos_and_year(dataframe_tos_initial)

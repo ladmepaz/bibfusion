@@ -1,5 +1,20 @@
 import networkx as nx
-
+def make_graph_acyclic(G):
+    """
+    Rompe ciclos en un grafo dirigido eliminando una arista por cada ciclo detectado.
+    """
+    while True:
+        try:
+            # Si se puede ordenar topológicamente, ya es acíclico
+            nx.find_cycle(G, orientation="original")
+            # Si no lanza excepción, hay al menos un ciclo
+            cycle_edges = nx.find_cycle(G, orientation="original")
+            # Eliminamos la primera arista del ciclo
+            G.remove_edge(cycle_edges[0][0], cycle_edges[0][1])
+        except nx.NetworkXNoCycle:
+            # No hay ciclos, terminamos
+            break
+    return G
 def get_tos(citation_network_with_branch, max_roots=20, max_trunk=20):
     """
     Identifies roots and trunks in the citation network graph and assigns the 'tos' attribute to nodes.
@@ -57,10 +72,10 @@ def get_tos(citation_network_with_branch, max_roots=20, max_trunk=20):
     try:
         topological_order = list(nx.topological_sort(G))
     except nx.NetworkXUnfeasible:
-        # If the graph is not acyclic, create a DAG by ignoring cycles
-        G = nx.DiGraph(nx.DiGraph(G).reverse())  # Reverse the graph
-        G.remove_edges_from(nx.selfloop_edges(G))
+        # Rompemos ciclos antes de ordenar
+        G = make_graph_acyclic(G)
         topological_order = list(nx.topological_sort(G))
+
 
     for node in reversed(topological_order):
         successors = list(G.successors(node))
