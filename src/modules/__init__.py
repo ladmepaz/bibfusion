@@ -47,6 +47,7 @@ from .fill_author_from_full_names import fill_author_from_full_names  # Fills au
 from .duplicates import remove_duplicates_df  # Removes duplicates between WoS and Scopus
 from .enrich_references_with_openalex import enrich_references_with_openalex  # General reference enrichment with OpenAlex
 from .unify_author_fullname_and_orcid import unify_author_fullname_and_orcid  # Unifies author names and ORCID
+from .enrich_wos_with_openalex_authors import enrich_wos_with_openalex_authors  # Enrich WoS authors via OpenAlex by DOI
 from .aggregate_sr_and_attach_scimago_ids import aggregate_sr_and_attach_scimago_ids  # Aggregates SR and attaches Scimago IDs
 from .fill_missing_issn_eissn_with_scimago import fill_missing_issn_eissn_with_scimago  # Fills missing ISSN/EISSN with Scimago
 from .resolve_duplicate_sourceids import resolve_duplicate_sourceids  # Resolves duplicate source IDs
@@ -104,6 +105,7 @@ __all__ = [
     "remove_duplicates_df",
     "enrich_references_with_openalex",
     "unify_author_fullname_and_orcid",
+    "enrich_wos_with_openalex_authors",
     "aggregate_sr_and_attach_scimago_ids",
     "fill_missing_issn_eissn_with_scimago",
     "resolve_duplicate_sourceids",
