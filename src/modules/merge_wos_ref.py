@@ -2,13 +2,18 @@ import logging
 import pandas as pd
 def merge_wos_ref(wos_df: pd.DataFrame, wos_ref_enriched: pd.DataFrame) -> pd.DataFrame:
     """
-    Modifies wos_df and wos_ref_enriched dataframes by:
-    - Adding 'ismainarticle' column with 'TRUE' to wos_df.
-    - Adding 'ismainarticle' column with 'FALSE' to wos_ref_enriched.
-    - Processing wos_ref_enriched (removing duplicates, column adjustments).
-    - Aligning columns between the two dataframes for concatenation.
-    - Concatenating wos_df and wos_ref_enriched into a single dataframe.
-    - Removing duplicates in 'SR' column, keeping entries where 'ismainarticle' == 'TRUE'.
+    Merge the main WoS dataframe (ideally already enriched with
+    `enrich_wos_with_openalex_authors`) with the references dataframe
+    produced by `enrich_references_with_openalex`.
+
+    Steps:
+    - Add 'ismainarticle' column with 'TRUE' to wos_df.
+    - Add 'ismainarticle' column with 'FALSE' to wos_ref_enriched.
+    - Process wos_ref_enriched: drop 'CR_ref', rename 'SR_ref'→'SR',
+      and collapse duplicates on 'SR' preferring rows with valid 'doi'.
+    - Align columns across dataframes (including OpenAlex fields like
+      'author_id_openalex' and 'openalex_work_id').
+    - Concatenate and de-duplicate on 'SR', keeping main articles first.
 
     Parameters:
     ----------
@@ -21,7 +26,7 @@ def merge_wos_ref(wos_df: pd.DataFrame, wos_ref_enriched: pd.DataFrame) -> pd.Da
     -------
     pd.DataFrame
         The combined dataframe with 'ismainarticle' column and all modifications applied.
-    """
+    """ 
     
 
     # Configure logging if not already configured
@@ -83,7 +88,7 @@ def merge_wos_ref(wos_df: pd.DataFrame, wos_ref_enriched: pd.DataFrame) -> pd.Da
         wos_ref_cleaned = wos_ref_enriched.copy()
         logging.warning("'SR' column not found in wos_ref_enriched; cannot remove duplicates based on 'SR'.")
 
-    # Step 3: Align Columns for Concatenation
+    # Step 3: Align Columns for Concatenation (keep OpenAlex fields)
     # Get list of all columns in both dataframes
     wos_df_columns = set(wos_df.columns)
     wos_ref_columns = set(wos_ref_cleaned.columns)
@@ -91,12 +96,12 @@ def merge_wos_ref(wos_df: pd.DataFrame, wos_ref_enriched: pd.DataFrame) -> pd.Da
     # Find columns missing in wos_ref_cleaned
     missing_in_refs = wos_df_columns - wos_ref_columns
     for col in missing_in_refs:
-        wos_ref_cleaned[col] = None  # Assign None or appropriate default value
+        wos_ref_cleaned[col] = pd.NA  # Ensure consistent missing value
 
     # Find columns missing in wos_df
     missing_in_wos_df = wos_ref_columns - wos_df_columns
     for col in missing_in_wos_df:
-        wos_df[col] = None  # Assign None or appropriate default value
+        wos_df[col] = pd.NA  # Ensure consistent missing value
 
     # Ensure both dataframes have the same column order
     wos_ref_cleaned = wos_ref_cleaned[wos_df.columns]
