@@ -144,12 +144,22 @@ def unify_author_fullname_and_orcid(
     'UnifiedOrcid': 'Orcid'
     })
 
-    # Create the three DataFrames
-    wos_author = final_df[['AuthorID', 'AuthorName', 'AuthorFullName', 'Orcid', 'ResearcherID', 'Email']]
+    # Create the three DataFrames (carry OpenAlex IDs when available)
+    wos_author_cols = [
+        'AuthorID', 'AuthorName', 'AuthorFullName', 'Orcid', 'ResearcherID', 'Email',
+        'OpenAlexAuthorID'
+    ]
+    wos_author = final_df[[c for c in wos_author_cols if c in final_df.columns]]
     wos_author = wos_author.drop_duplicates(subset=['AuthorID'])
-    articleauthor = final_df[['SR', 'AuthorID', 'AuthorOrder', 'CorrespondingAuthor']]
+
+    articleauthor_cols = [
+        'SR', 'openalex_work_id', 'AuthorID', 'AuthorOrder', 'CorrespondingAuthor', 'OpenAlexAuthorID'
+    ]
+    articleauthor = final_df[[c for c in articleauthor_cols if c in final_df.columns]]
     articleauthor = articleauthor.drop_duplicates()
-    wos_author_affiliation = final_df[['SR', 'AuthorID', 'Affiliation']]
+
+    wos_author_affiliation_cols = ['SR', 'AuthorID', 'Affiliation']
+    wos_author_affiliation = final_df[[c for c in wos_author_affiliation_cols if c in final_df.columns]]
     wos_author_affiliation = wos_author_affiliation.drop_duplicates()
 
     # Return the three DataFrames as a list
