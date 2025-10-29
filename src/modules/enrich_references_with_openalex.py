@@ -81,6 +81,9 @@ def get_paper_info_from_doi(doi, sr_ref=None, cr_ref=None, source_title=None, ye
 
         # Normalizar nombres a MAYÚSCULAS sin tildes
         author_full_names_upper = _to_upper_ascii("; ".join(filter(None, author_full_names))) if author_full_names else ""
+        # Normalizar afiliaciones (para referencias las escribiremos en 'affiliation_2')
+        affiliations_joined = "; ".join(filter(None, affiliations)) if affiliations else ""
+        affiliation_2_upper = _to_upper_ascii(affiliations_joined) if affiliations_joined else ""
         
         return {
             #"authors": "; ".join(filter(None, authors)),  # Filtra valores None
@@ -100,7 +103,8 @@ def get_paper_info_from_doi(doi, sr_ref=None, cr_ref=None, source_title=None, ye
             "page": f"{bibliographic_info.get('first_page', 'N/A')}-{bibliographic_info.get('last_page', 'N/A')}",
             "journal_issue_number": bibliographic_info.get("issue", "N/A"),
             "orcid": "; ".join(filter(None, orcids)),
-            "affiliations": "; ".join(filter(None, affiliations)),
+            # Para referencias, usamos 'affiliation_2' en lugar de 'affiliations'
+            "affiliation_2": affiliation_2_upper,
             "keywords": keywords_str,
             "author_id_openalex": "; ".join(filter(None, author_ids)),
             "openalex_work_id": openalex_work_id,
@@ -154,7 +158,7 @@ def enrich_references_with_openalex(df):
     # Reordenar columnas (incluyendo keywords)
     column_order = [
         'doi', 'SR_ref', 'CR_ref',
-        'authors', 'author_full_names', 'orcid', 'affiliations',
+        'authors', 'author_full_names', 'orcid', 'affiliation_2',
         'title', 'source_title', 'journal', 'journal_issue_number',
         'year', 'year_openalex', 'volume', 'issue', 'page', 'keywords',
         'author_id_openalex', 'openalex_work_id'
