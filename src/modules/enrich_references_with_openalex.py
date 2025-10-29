@@ -1,6 +1,7 @@
 import requests
 import pandas as pd
 import time
+import unicodedata
 
 def reconstruct_abstract(abstract_inverted_index):
     if not isinstance(abstract_inverted_index, dict):  # Verifica si es un diccionario
@@ -10,6 +11,14 @@ def reconstruct_abstract(abstract_inverted_index):
         for pos in positions:
             abstract[pos] = word
     return " ".join(abstract[i] for i in sorted(abstract))
+
+
+def _to_upper_ascii(text: str) -> str:
+    if not isinstance(text, str):
+        return text
+    normalized = unicodedata.normalize('NFKD', text)
+    stripped = ''.join(ch for ch in normalized if not unicodedata.combining(ch))
+    return stripped.upper()
 
 # Enrich references with OpenAlex
 def get_paper_info_from_doi(doi, sr_ref=None, cr_ref=None, source_title=None, year=None, authors=None):
@@ -35,9 +44,10 @@ def get_paper_info_from_doi(doi, sr_ref=None, cr_ref=None, source_title=None, ye
         publication_year = data.get("publication_year", "N/A")
         source = data.get("primary_location", {}).get("source", {})
         
-        # Preparar lista de autores y ORCIDs
+        # Preparar lista de autores, ORCIDs e IDs de OpenAlex
         author_full_names = []
         orcids = []
+        author_ids = []
         affiliations = []
         
         authorships = data.get("authorships", [])
@@ -45,10 +55,12 @@ def get_paper_info_from_doi(doi, sr_ref=None, cr_ref=None, source_title=None, ye
             author_data = auth.get("author", {})
             author_name = author_data.get("display_name", "N/A")
             author_orcid = author_data.get("orcid", "N/A")
+            author_id = author_data.get("id", "")
             
             # Recolectar información de autores
             author_full_names.append(author_name)
             orcids.append(author_orcid)
+            author_ids.append(author_id if author_id else "")
             
             # Recolectar afiliaciones
             author_affiliations = [
@@ -64,7 +76,11 @@ def get_paper_info_from_doi(doi, sr_ref=None, cr_ref=None, source_title=None, ye
         
         # Información bibliográfica
         bibliographic_info = data.get("biblio", {})
+        openalex_work_id = data.get("id", "")
         orcids = ["NO ORCID" if not orcid else orcid for orcid in orcids]
+
+        # Normalizar nombres a MAYÚSCULAS sin tildes
+        author_full_names_upper = _to_upper_ascii("; ".join(filter(None, author_full_names))) if author_full_names else ""
         
         return {
             #"authors": "; ".join(filter(None, authors)),  # Filtra valores None
@@ -74,7 +90,7 @@ def get_paper_info_from_doi(doi, sr_ref=None, cr_ref=None, source_title=None, ye
             "CR_ref": cr_ref,
             "year": year,
             "source_title": source_title,
-            "author_full_names": "; ".join(filter(None, author_full_names)),
+            "author_full_names": author_full_names_upper,
             "journal": source.get("display_name", "N/A"),
             "year_openalex": publication_year,
             "abstract": data.get("abstract_inverted_index", "N/A"),
@@ -86,6 +102,8 @@ def get_paper_info_from_doi(doi, sr_ref=None, cr_ref=None, source_title=None, ye
             "orcid": "; ".join(filter(None, orcids)),
             "affiliations": "; ".join(filter(None, affiliations)),
             "keywords": keywords_str,
+            "author_id_openalex": "; ".join(filter(None, author_ids)),
+            "openalex_work_id": openalex_work_id,
         }
     
     except requests.exceptions.RequestException as e:
@@ -135,10 +153,11 @@ def enrich_references_with_openalex(df):
     
     # Reordenar columnas (incluyendo keywords)
     column_order = [
-        'doi', 'SR_ref', 'CR_ref',  
-        'authors', 'author_full_names', 'orcid', 'affiliations',  
-        'title', 'source_title', 'journal', 'journal_issue_number',  
-        'year', 'year_openalex', 'volume', 'issue', 'page', 'keywords'
+        'doi', 'SR_ref', 'CR_ref',
+        'authors', 'author_full_names', 'orcid', 'affiliations',
+        'title', 'source_title', 'journal', 'journal_issue_number',
+        'year', 'year_openalex', 'volume', 'issue', 'page', 'keywords',
+        'author_id_openalex', 'openalex_work_id'
     ]
 
     enrich_references = enrich_references[column_order]
