@@ -124,18 +124,43 @@ def unify_author_fullname_and_orcid(
     final_df = pd.concat(all_results, ignore_index=True)
     final_df['UnifiedOrcid'] = final_df['UnifiedOrcid'].fillna('NO ORCID')
     final_df['UnifiedName'] = final_df['UnifiedName'].str.rstrip('.')
-    # Create the AuthorID column by concatenating AuthorName, AuthorFullName, and UnifiedOrcid
-    final_df['AuthorID'] = (
-        final_df['AuthorName'] + '_' +
-        final_df['UnifiedName'] + '_' +
-        final_df['UnifiedOrcid']
-    )
-    # Clean the AuthorID column: remove special characters and replace spaces with underscores
-    final_df['AuthorID'] = (
-        final_df['AuthorID']
-        .str.replace(r'[.,]', '', regex=True)  # Remove '.' and ','
-        .str.replace(r'\s+', '_', regex=True)  # Replace spaces with '_'
-    )
+
+    # Build a stable AuthorID preferring ORCID, then OpenAlexAuthorID, else name-based
+    def _norm_orcid(val: str) -> str:
+        if not isinstance(val, str):
+            return ''
+        s = val.strip()
+        if not s or s.upper() == 'NO ORCID':
+            return ''
+        # Take last path segment if a URL, otherwise the raw string
+        return s.split('/')[-1]
+
+    def _short_openalex_id(val: str) -> str:
+        if not isinstance(val, str):
+            return ''
+        s = val.strip()
+        return s.split('/')[-1] if s else ''
+
+    final_df['__OrcidNorm'] = final_df['UnifiedOrcid'].apply(_norm_orcid)
+    if 'OpenAlexAuthorID' in final_df.columns:
+        final_df['__OAshort'] = final_df['OpenAlexAuthorID'].apply(_short_openalex_id)
+    else:
+        final_df['__OAshort'] = ''
+
+    def _make_author_id(row):
+        if row['__OrcidNorm']:
+            return f"ORCID:{row['__OrcidNorm']}"
+        if row['__OAshort']:
+            return f"OA:{row['__OAshort']}"
+        # Fallback to name-based key (stable but less precise)
+        base = f"{row.get('UnifiedName','') or ''}".strip()
+        base = base.replace(',', '').replace('.', '')
+        base = '_'.join(base.split())
+        return f"NAME:{base.upper()}"
+
+    final_df['AuthorID'] = final_df.apply(_make_author_id, axis=1)
+    # Cleanup temp cols
+    final_df = final_df.drop(columns=['__OrcidNorm', '__OAshort'], errors='ignore')
 
     final_df = final_df.rename(columns={
     'AuthorFullName': 'AuthorFullName_old',

@@ -9,6 +9,7 @@ from modules import get_wos_author_data  # Gets author data from WoS
 from modules import enrich_wos_author_data  # Enriches WoS author data
 from modules import get_article_entity  # Gets article entity from WoS
 from modules import enrich_references_with_openalex # General reference enrichment with OpenAlex
+from modules import enrich_wos_with_openalex_authors  # Enrich WoS authors (names/ORCIDs/IDs) via OpenAlex
 
 # ==========================
 #  Scopus
@@ -99,6 +100,16 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         wos_df.to_csv(os.path.join(output_dir, "2_temp_wos_df_removeDuplicates.csv"), index=False)
         print(f"2. Duplicados removidos: {duplicates_removed}")
 
+        # Enrich WoS main articles with OpenAlex authors (names in uppercase ASCII, replace ORCID)
+        wos_df = enrich_wos_with_openalex_authors(
+            wos_df,
+            replace=True,
+            keep_raw=False,
+            uppercase_ascii=True,
+        )
+        wos_df.to_csv(os.path.join(output_dir, "2-1_temp_wos_df_openalex_authors.csv"), index=False)
+        print("2.1. Autores de WoS enriquecidos con OpenAlex (nombres/ORCID/IDs)")
+
         # Get references
         wos_references, wos_citation = get_wos_references(wos_df)
         wos_citation.to_csv(os.path.join(output_dir, "Citation.csv"), index=False)
@@ -122,7 +133,8 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         #           Scimago Dataframe
         ##############################################
 
-        scimago = pd.read_csv('tests/files/scimago/scimago.csv')
+        # Load Scimago reference data (correct relative path)
+        scimago = pd.read_csv('tests/files/scimago.csv')
 
         wos_df_4 = standarize_journal_data(wos_df_3)
         wos_df_4.to_csv(os.path.join(output_dir,'5-1_temp_wos_df_standarized.csv'), index=False)
@@ -248,7 +260,8 @@ def preprocesing_df(path_wos=None,path_scopus=None):
               """)
         
         # Load Scimago df
-        scimago = pd.read_csv('tests/files/scimago/scimago.csv')
+        # Load Scimago reference data (correct relative path)
+        scimago = pd.read_csv('tests/files/scimago.csv')
         
         # Dataframe
         scopus_df = scopus_csv_to_df(path_scopus, scimago)
@@ -445,6 +458,5 @@ def preprocesing_df(path_wos=None,path_scopus=None):
 
 # preprocesing_df(r"path_wos" or [r"path_wos",r"path_wos_2"], r"path_scopus")
 preprocesing_df(
-                None, 
-                None
-                )
+                  r"C:\Users\User\OneDrive\Documentos\Preprocessing\preprocessing_4\preprocessing\EM_190.txt",
+                  )
