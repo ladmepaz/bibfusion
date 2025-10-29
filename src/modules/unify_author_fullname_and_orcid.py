@@ -147,11 +147,29 @@ def unify_author_fullname_and_orcid(
     else:
         final_df['__OAshort'] = ''
 
+    # If an ORCID maps to multiple distinct OpenAlex IDs, prefer OA for disambiguation
+    if 'OpenAlexAuthorID' in final_df.columns:
+        # Build mapping: orcid_norm -> number of distinct OA ids (excluding empty)
+        counts = (
+            final_df.assign(__oa_nonempty=final_df['__OAshort'].astype(str).str.len() > 0)
+                    .groupby('__OrcidNorm')['__OAshort']
+                    .nunique(dropna=True)
+        )
+        # Convert to dict for fast lookup
+        orcid_to_oa_unique = counts.to_dict()
+    else:
+        orcid_to_oa_unique = {}
+
     def _make_author_id(row):
-        if row['__OrcidNorm']:
-            return f"ORCID:{row['__OrcidNorm']}"
-        if row['__OAshort']:
-            return f"OA:{row['__OAshort']}"
+        orcid_norm = row['__OrcidNorm']
+        oa_short = row['__OAshort']
+        # If this ORCID appears with multiple OpenAlex IDs, prefer OA to avoid collapsing distinct authors
+        if orcid_norm and orcid_to_oa_unique.get(orcid_norm, 0) > 1 and oa_short:
+            return f"OA:{oa_short}"
+        if orcid_norm:
+            return f"ORCID:{orcid_norm}"
+        if oa_short:
+            return f"OA:{oa_short}"
         # Fallback to name-based key (stable but less precise)
         base = f"{row.get('UnifiedName','') or ''}".strip()
         base = base.replace(',', '').replace('.', '')
