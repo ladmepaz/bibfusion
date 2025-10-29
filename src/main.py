@@ -458,5 +458,5 @@ def preprocesing_df(path_wos=None,path_scopus=None):
 
 # preprocesing_df(r"path_wos" or [r"path_wos",r"path_wos_2"], r"path_scopus")
 preprocesing_df(
-                  r"C:\Users\User\OneDrive\Documentos\Preprocessing\preprocessing_4\preprocessing\EM_190.txt",
+                  r"C:\Users\User\OneDrive\Documentos\Preprocessing\preprocessing_4\preprocessing\EM_1.txt",
                   )
