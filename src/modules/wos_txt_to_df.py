@@ -1,6 +1,7 @@
 import pandas as pd
 import re
 import os
+import unicodedata
 
 def wos_txt_to_df(file_paths):
     """
@@ -231,6 +232,60 @@ def wos_txt_to_df(file_paths):
        
         df = df[desired_columns]
         df.rename(columns=rename_columns, inplace=True)
+
+        # Derive 'country' from 'affiliations' (WoS main articles only)
+        def _ascii_upper(text: str) -> str:
+            if not isinstance(text, str):
+                return ''
+            norm = unicodedata.normalize('NFKD', text)
+            stripped = ''.join(ch for ch in norm if not unicodedata.combining(ch))
+            return stripped.upper().strip()
+
+        # Load country mappings if available
+        country_map = {}
+        try:
+            repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+            country_csv = os.path.join(repo_root, 'tests', 'files', 'country.csv')
+            if os.path.exists(country_csv):
+                cdf = pd.read_csv(country_csv, sep=';')
+                for name in cdf.get('Name', pd.Series(dtype=str)).astype(str):
+                    up = _ascii_upper(name)
+                    if up:
+                        country_map[up] = up
+        except Exception:
+            country_map = {}
+
+        synonyms = {
+            'USA': 'UNITED STATES', 'U S A': 'UNITED STATES', 'UNITED STATES OF AMERICA': 'UNITED STATES',
+            'U ARAB EMIR': 'UNITED ARAB EMIRATES', 'UNITED ARAB EMIR': 'UNITED ARAB EMIRATES',
+            'PEOPLES R CHINA': 'CHINA', 'PEOPLES REPUBLIC OF CHINA': 'CHINA', 'P R CHINA': 'CHINA',
+            'ENGLAND': 'UNITED KINGDOM', 'SCOTLAND': 'UNITED KINGDOM', 'WALES': 'UNITED KINGDOM',
+            'NORTHERN IRELAND': 'UNITED KINGDOM',
+        }
+
+        def extract_countries(aff_str: str) -> str:
+            if not isinstance(aff_str, str) or not aff_str.strip():
+                return ''
+            s = aff_str.strip()
+            segs = re.findall(r"\[[^\]]+\][^;]*", s)
+            if not segs:
+                segs = [p for p in s.split(';') if p.strip()]
+            countries = []
+            for seg in segs:
+                parts = seg.rsplit(',', 1)
+                cand = parts[-1] if parts else seg
+                cand = _ascii_upper(cand).rstrip('.')
+                cand = re.sub(r"\s+", " ", cand)
+                norm = synonyms.get(cand) or country_map.get(cand) or cand
+                countries.append(norm)
+            return '; '.join(countries) if countries else ''
+
+        try:
+            if 'affiliations' in df.columns:
+                df['country'] = df['affiliations'].apply(extract_countries)
+        except Exception:
+            df['country'] = ''
+
         df.drop(columns=['ER', 'EF', 'TC'], inplace=True)
 
         return df
