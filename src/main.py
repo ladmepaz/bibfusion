@@ -50,6 +50,7 @@ from modules import fill_missing_issn_eissn_with_scimago # Fills missing ISSN/EI
 from modules import resolve_duplicate_sourceids # Resolves duplicate source IDs in WoS
 from modules import add_year_and_scimago_info # Adds year and Scimago info to scimagodb
 from modules import export_csvs_as_excel # Combines CSV files into an Excel file
+from modules import consolidate_authors  # Consolidate authors into person-level identities
 
 # ============================
 # utils
@@ -186,6 +187,16 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         wos_author.to_csv(os.path.join(output_dir,'Author.csv'), index=False)
         articleauthor_wos.to_csv(os.path.join(output_dir,'ArticleAuthor.csv'), index=False)
         wos_author_affiliation_no_country.to_csv(os.path.join(output_dir,'10_temp_wos_author_affiliation.csv'), index=False)
+
+        # Consolidate authors to person-level identities and export auxiliary mappings
+        try:
+            author_person, author_alias, author_conflicts = consolidate_authors(wos_author)
+            author_person.to_csv(os.path.join(output_dir, 'AuthorPerson.csv'), index=False)
+            author_alias.to_csv(os.path.join(output_dir, 'AuthorAlias.csv'), index=False)
+            author_conflicts.to_csv(os.path.join(output_dir, 'AuthorConflicts.csv'), index=False)
+            print("10.1. Consolidación de autores generada: AuthorPerson/AuthorAlias/AuthorConflicts")
+        except Exception as e:
+            print(f"[WARN] Falló la consolidación de autores: {e}")
 
         # Get country affiliation
         country_codes_file = "tests/files/country.csv"
@@ -458,5 +469,5 @@ def preprocesing_df(path_wos=None,path_scopus=None):
 
 # preprocesing_df(r"path_wos" or [r"path_wos",r"path_wos_2"], r"path_scopus")
 preprocesing_df(
-                  r"C:\Users\User\OneDrive\Documentos\Preprocessing\preprocessing_4\preprocessing\EM_1.txt",
+                  r"C:\Users\User\OneDrive\Documentos\Preprocessing\preprocessing_4\preprocessing\EM_190.txt",
                   )
