@@ -276,7 +276,22 @@ def wos_txt_to_df(file_paths):
                 cand = parts[-1] if parts else seg
                 cand = _ascii_upper(cand).rstrip('.')
                 cand = re.sub(r"\s+", " ", cand)
-                norm = synonyms.get(cand) or country_map.get(cand) or cand
+
+                # Handle US state + ZIP + USA patterns → USA
+                if re.search(r"\bUSA\b$", cand):
+                    norm = 'UNITED STATES'
+                else:
+                    # Extract trailing alpha words as potential country name
+                    m = re.search(r"([A-Z][A-Z ]+)$", cand)
+                    tail = m.group(1).strip() if m else cand
+                    # Exact match on multi-word names
+                    norm = synonyms.get(tail) or country_map.get(tail)
+                    if not norm:
+                        # Try last token only (e.g., 'MEXICO' from 'MEXICO CITY')
+                        last_tok = tail.split()[-1]
+                        norm = synonyms.get(last_tok) or country_map.get(last_tok)
+                    if not norm:
+                        norm = tail
                 countries.append(norm)
             return '; '.join(countries) if countries else ''
 
