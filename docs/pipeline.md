@@ -65,3 +65,67 @@ This document summarizes the end‑to‑end WoS preprocessing flow and main arti
 - AuthorID in `Author.csv` prefers ORCID; if one ORCID maps to multiple OpenAlex IDs, the unify step may use OA to avoid collapsing distinct profiles.
 - For analyses, prefer `AuthorPerson.csv` with `AuthorAlias.csv` for lookups.
 
+## Diagram
+
+```mermaid
+flowchart TD
+  subgraph Import
+    A[wos_txt_to_df (WoS .txt)\n→ wos_df]
+    B[remove_duplicates_df\n→ deduped wos_df]
+    A --> B
+  end
+
+  subgraph EnrichMain[Enrich Main Articles]
+    C[enrich_wos_with_openalex_authors\nreplace author_full_names/orcid\n+ author_id_openalex, openalex_work_id]
+  end
+  B --> C
+
+  subgraph Refs[References]
+    D[get_wos_references\n→ wos_references, wos_citation]
+    E[enrich_references_with_openalex\nUPPERCASE names\naffiliation_2\n+ author/work IDs\n→ wos_ref_enriched]
+    D --> E
+  end
+  C --> D
+
+  F[merge_wos_ref\nkeep affiliations (WoS) for main\nkeep affiliation_2 (OpenAlex) for refs\n→ wos_df_3]
+  E --> F
+
+  subgraph Scimago
+    G[standarize_journal_data]
+    H[fill_missing_issn_eissn_with_scimago]
+    I[aggregate_sr_and_attach_scimago_ids]
+    J[resolve_duplicate_sourceids]
+    K[add_year_and_scimago_info]
+    F --> G --> H --> I --> J --> K
+  end
+
+  subgraph Authors[Author Tables]
+    L[get_wos_author_data\n+ OpenAlexAuthorID/openalex_work_id]
+    M[enrich_wos_author_data]
+    N[unify_author_fullname_and_orcid\n→ Author.csv, ArticleAuthor.csv,\n10_temp_wos_author_affiliation.csv]
+    O[fill_missing_affiliations + extract_countries\n→ Affiliation.csv]
+    F --> L --> M --> N --> O
+  end
+
+  subgraph ArticlesToS[Article + ToS]
+    P[get_article_entity\n→ Article.csv]
+    Q[get_citation_network → clean → add_community_branch → get_tos]
+    R[graph_to_df\n→ tos_df_nodes.csv, tos_df_edges.csv]
+    S[merge_tos_with_articles]
+    T[sort_by_tos_and_year\n→ TreeOfScience.csv]
+    F --> P
+    D --> Q --> R --> S --> T
+  end
+
+  subgraph Consolidation[Person-level Consolidation]
+    U[consolidate_authors(Author.csv)\n→ AuthorPerson.csv, AuthorAlias.csv, AuthorConflicts.csv]
+    N --> U
+  end
+
+  V[export_csvs_as_excel\n→ data.xlsx]
+  K --> V
+  O --> V
+  P --> V
+  T --> V
+  U --> V
+```
