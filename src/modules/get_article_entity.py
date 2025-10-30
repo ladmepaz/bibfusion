@@ -29,6 +29,7 @@ def get_article_entity(wos_df_3):
         'language',
         'journal',
         'source_title',
+        'country',
         'doi',
         'page_start',
         'page_end',
