@@ -28,6 +28,10 @@ df_wos = wos_df()
 df_scopus = scopus_df()
 ```
 
+## Pipeline
+
+- See `docs/pipeline.md` for a concise end‑to‑end overview of the WoS preprocessing flow, key steps, and main outputs.
+
 ## Affiliations: Column Conventions
 
 - `affiliations` (WoS main articles only):
