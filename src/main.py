@@ -195,6 +195,16 @@ def preprocesing_df(path_wos=None,path_scopus=None):
             author_alias.to_csv(os.path.join(output_dir, 'AuthorAlias.csv'), index=False)
             author_conflicts.to_csv(os.path.join(output_dir, 'AuthorConflicts.csv'), index=False)
             print("10.1. Consolidación de autores generada: AuthorPerson/AuthorAlias/AuthorConflicts")
+
+            # Add PersonID back into Author and ArticleAuthor for stronger joins
+            alias_map = author_alias[['AuthorID', 'PersonID']].drop_duplicates()
+            wos_author_pid = wos_author.merge(alias_map, on='AuthorID', how='left')
+            articleauthor_pid = articleauthor_wos.merge(alias_map, on='AuthorID', how='left')
+
+            # Overwrite with PersonID-enriched versions
+            wos_author_pid.to_csv(os.path.join(output_dir,'Author.csv'), index=False)
+            articleauthor_pid.to_csv(os.path.join(output_dir,'ArticleAuthor.csv'), index=False)
+            print("10.2. Añadido PersonID a Author y ArticleAuthor")
         except Exception as e:
             print(f"[WARN] Falló la consolidación de autores: {e}")
 
