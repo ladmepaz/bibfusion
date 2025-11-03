@@ -1,4 +1,5 @@
 import requests
+from requests.exceptions import ConnectionError, Timeout, HTTPError, RequestException #Excepciones específicas
 import pandas as pd
 import time
 from typing import List, Optional, Dict, Any
@@ -21,14 +22,52 @@ def get_openalex_references(doi: str) -> List[str]:
     if not clean:
         return []
     url = f"https://api.openalex.org/works/doi:{clean}"
-    try:
-        r = requests.get(url); r.raise_for_status()
-        data = r.json()
-        refs = data.get("referenced_works", [])
-        return [f"https://openalex.org/{r.split('/')[-1]}" for r in refs if r]
-    except requests.RequestException as e:
-        #print(f"[get_refs] Error {clean}: {e}")
-        return []
+    while True:
+        try:
+            r = requests.get(url, timeout=60); r.raise_for_status()
+            data = r.json()
+            refs = data.get("referenced_works", [])
+            return [f"https://openalex.org/{r.split('/')[-1]}" for r in refs if r]
+        except (ConnectionError, Timeout) as e:
+            print(f"❌ Conexión perdida/Timeout para DOI {doi}. Intentando reconexión...")
+
+            # Bucle interno de pausa y verificación de conexión
+            while True:
+                PAUSE_TIME = 15
+                print(f"   Pausando por {PAUSE_TIME} segundos.")
+                time.sleep(PAUSE_TIME)
+            
+                try:
+                    # Intento ligero de ping a un sitio confiable para verificar la red
+                    requests.get("https://1.1.1.1", timeout=10) 
+                    print("✅ Conexión reestablecida. Reintentando la solicitud a OpenAlex...")
+                    break # Sale del bucle de pausa y vuelve a intentar la solicitud principal
+                except (ConnectionError, Timeout):
+                    print("❌ Conexión aún inestable. Volviendo a pausar.")
+
+        except HTTPError as e:
+            status_code = e.response.status_code
+            
+            if status_code == 404:
+                print(f"DOI no encontrado (404): {doi}. Se salta.")
+                return [] # Devuelve lista vacía 
+            
+            elif status_code == 429:
+                print(f"Límite de tasa (429) alcanzado. Pausando por 30 segundos...")
+                time.sleep(30)
+                continue # Reintenta
+            
+            else:
+                print(f"   🛑 Error HTTP inesperado ({status_code}) para {doi}. Se salta.")
+                return [] # Devuelve lista vacía 
+        
+        except RequestException as e:
+            print(f"❌ Error desconocido de Request para {doi}: {e}")
+            return [] # Devuelve lista vacía
+
+        except Exception as e:
+            print(f"   🛑 Error general inesperado para {doi}: {e}")
+            return [] # Devuelve lista vacía
 
 
 def generate_references_column(df: pd.DataFrame, doi_col: str = 'doi') -> pd.DataFrame:
@@ -69,13 +108,59 @@ def generate_references_column(df: pd.DataFrame, doi_col: str = 'doi') -> pd.Dat
 # --- 2) Fetch y extracción de metadata de cada referencia ---
 
 def fetch_openalex_work(work_id: str) -> Optional[Dict[str, Any]]:
-    try:
-        r = requests.get(f"https://api.openalex.org/works/{work_id}")
-        r.raise_for_status()
-        return r.json()
-    except requests.RequestException as e:
-        #print(f"[fetch_work] Error {work_id}: {e}")
-        return None
+    while True:
+        try:
+            #Time out para evitar que la petición quede colgada
+            r = requests.get(f"https://api.openalex.org/works/{work_id}", timeout=60)
+            r.raise_for_status()
+            return r.json()
+        # Manejo de error de conexión
+        except (ConnectionError, Timeout) as e:
+            print(f"❌ Conexión perdida/Timeout para Work ID {work_id}. Intentando reconexión...")
+            
+            # Bucle interno de pausa y verificación de conexión
+            while True:
+                PAUSE_TIME = 15
+                print(f"   Pausando por {PAUSE_TIME} segundos.")
+                time.sleep(PAUSE_TIME)
+                
+                try:
+                    # Intento ligero de ping a un sitio confiable para verificar la red
+                    requests.get("https://1.1.1.1", timeout=10) 
+                    print("✅ Conexión reestablecida. Reintentando la solicitud a OpenAlex...")
+                    break # Sale del bucle de pausa y vuelve a intentar la solicitud principal
+                except (ConnectionError, Timeout):
+                    print("❌ Conexión aún inestable. Volviendo a pausar.")
+        # Manejo de errores HTTP 
+        except HTTPError as e:
+            status_code = e.response.status_code
+            
+            if status_code == 404:
+                # El recurso no existe (No es un error de conexión, no se reintenta)
+                print(f"Work ID no encontrado (404): {work_id}. Se salta.")
+                return None 
+            
+            elif status_code == 429:
+                # Límite de tasa alcanzado (Se espera y se reintenta)
+                print(f"Límite de tasa (429) alcanzado. Pausando por 30 segundos...")
+                time.sleep(30)
+                continue # Vuelve al inicio del bucle while True para reintentar el mismo work_id
+
+            else:
+                # Otros errores HTTP (ej. 5xx del servidor OpenAlex)
+                print(f"Error HTTP inesperado ({status_code}) para {work_id}. Se salta.")
+                return None
+
+        # Manejo de cualquier otra excepción de Requests
+        except RequestException as e:
+            print(f"Error desconocido de Request para {work_id}: {e}")
+            return None
+        
+        # Manejo de cualquier otra excepción general
+        except Exception as e:
+            print(f"Error general inesperado para {work_id}: {e}")
+            return None
+        
 
 
 def extract_work_info(w: Dict[str, Any]) -> Dict[str, Any]:
@@ -366,3 +451,10 @@ def generate_SR_ref(df: pd.DataFrame) -> pd.DataFrame:
 
     # drop temporary cols
     return df.drop(columns=['first_author', 'year_clean', 'source_title_clean'], errors='ignore')
+#Pruebas
+df_test = pd.read_csv("C:\\Users\\Lenovo\\Downloads\\Copia de Scopus_data.xlsx - extraction_linksref_openalex (2).csv")
+t_inicio = time.time()
+df_test_enriched = openalex_enrich_ref(df_test)
+t_final = time.time()
+print(df_test_enriched.info())  
+print(f"Tiempo de enriquecimiento: {t_final - t_inicio} segundos")
