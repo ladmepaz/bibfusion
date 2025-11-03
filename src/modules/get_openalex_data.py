@@ -451,10 +451,3 @@ def generate_SR_ref(df: pd.DataFrame) -> pd.DataFrame:
 
     # drop temporary cols
     return df.drop(columns=['first_author', 'year_clean', 'source_title_clean'], errors='ignore')
-#Pruebas
-df_test = pd.read_csv("C:\\Users\\Lenovo\\Downloads\\Copia de Scopus_data.xlsx - extraction_linksref_openalex (2).csv")
-t_inicio = time.time()
-df_test_enriched = openalex_enrich_ref(df_test)
-t_final = time.time()
-print(df_test_enriched.info())  
-print(f"Tiempo de enriquecimiento: {t_final - t_inicio} segundos")
