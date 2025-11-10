@@ -1,7 +1,7 @@
 import requests
 import pandas as pd
 import time
-
+from requests.exceptions import ConnectionError, Timeout, HTTPError 
 def reconstruct_abstract(abstract_inverted_index):
     if not isinstance(abstract_inverted_index, dict):  # Verifica si es un diccionario
         return ""  # Devuelve un string vacío si no es válido
@@ -15,6 +15,7 @@ def reconstruct_abstract(abstract_inverted_index):
 def get_paper_info_from_doi(doi, sr_ref=None, cr_ref=None, source_title=None, year=None, authors=None):
     """
     Obtiene información detallada de un DOI usando la API de OpenAlex.
+    Incluye bucle de reintento y pausa por problemas de ConnectionError.
     
     Args:
         doi (str): DOI del documento
@@ -25,72 +26,113 @@ def get_paper_info_from_doi(doi, sr_ref=None, cr_ref=None, source_title=None, ye
     """
     api_url = f"https://api.openalex.org/works/doi:{doi}"
     
-    try:
-        response = requests.get(api_url)
-        response.raise_for_status()
-        data = response.json()
-        
-        # Extracción de información básica
-        title = data.get("title", "")
-        publication_year = data.get("publication_year", "N/A")
-        source = data.get("primary_location", {}).get("source", {})
-        
-        # Preparar lista de autores y ORCIDs
-        author_full_names = []
-        orcids = []
-        affiliations = []
-        
-        authorships = data.get("authorships", [])
-        for auth in authorships:
-            author_data = auth.get("author", {})
-            author_name = author_data.get("display_name", "N/A")
-            author_orcid = author_data.get("orcid", "N/A")
+    # Bucle principal de reintento para la solicitud de la API
+    while True:
+        try:
+            response = requests.get(api_url, timeout=60)  # La solicitud fallará si tarda más de 60 segundos
+            response.raise_for_status()
+            data = response.json()
             
-            # Recolectar información de autores
-            author_full_names.append(author_name)
-            orcids.append(author_orcid)
+            # Extracción de información básica
+            title = data.get("title", "")
+            publication_year = data.get("publication_year", "N/A")
+            source = data.get("primary_location", {}).get("source", {})
             
-            # Recolectar afiliaciones
-            author_affiliations = [
-                aff.get("display_name", "N/A") 
-                for aff in auth.get("institutions", [])
-            ]
-            affiliations.append("; ".join(author_affiliations))
+            # Preparar lista de autores y ORCIDs
+            author_full_names = []
+            orcids = []
+            affiliations = []
+            
+            authorships = data.get("authorships", [])
+            for auth in authorships:
+                author_data = auth.get("author", {})
+                author_name = author_data.get("display_name", "N/A")
+                author_orcid = author_data.get("orcid", "N/A")
+                
+                # Recolectar información de autores
+                author_full_names.append(author_name)
+                orcids.append(author_orcid)
+                
+                # Recolectar afiliaciones
+                author_affiliations = [
+                    aff.get("display_name", "N/A") 
+                    for aff in auth.get("institutions", [])
+                ]
+                affiliations.append("; ".join(author_affiliations))
+            
+            # Extracción de keywords
+            keywords_list = data.get("keywords", [])
+            keywords = [keyword.get("display_name", "") for keyword in keywords_list]
+            keywords_str = "; ".join(filter(None, keywords)) if keywords else "N/A"
+            
+            # Información bibliográfica
+            bibliographic_info = data.get("biblio", {})
+            orcids = ["NO ORCID" if not orcid else orcid for orcid in orcids]
+            
+            return {
+                #"authors": "; ".join(filter(None, authors)),  # Filtra valores None
+                "authors": authors,
+                "doi": doi,
+                "SR_ref": sr_ref,
+                "CR_ref": cr_ref,
+                "year": year,
+                "source_title": source_title,
+                "author_full_names": "; ".join(filter(None, author_full_names)),
+                "journal": source.get("display_name", "N/A"),
+                "year_openalex": publication_year,
+                "abstract": data.get("abstract_inverted_index", "N/A"),
+                "title": title,
+                "volume": bibliographic_info.get("volume", "N/A"),
+                "issue": bibliographic_info.get("issue", "N/A"),
+                "page": f"{bibliographic_info.get('first_page', 'N/A')}-{bibliographic_info.get('last_page', 'N/A')}",
+                "journal_issue_number": bibliographic_info.get("issue", "N/A"),
+                "orcid": "; ".join(filter(None, orcids)),
+                "affiliations": "; ".join(filter(None, affiliations)),
+                "keywords": keywords_str,
+            }
         
-        # Extracción de keywords
-        keywords_list = data.get("keywords", [])
-        keywords = [keyword.get("display_name", "") for keyword in keywords_list]
-        keywords_str = "; ".join(filter(None, keywords)) if keywords else "N/A"
+        # Manejo de excepciones de CONEXIÓN
+        # Capturamos errores de conexión y timeout
+        except (ConnectionError, Timeout) as e:
+            # Esta sección se ejecuta si se pierde la conexión O si la solicitud tarda más de 60s
+            print(f"Conexión perdida para DOI {doi}. El código se pausará.")
+            print(f"Error: {e}")
+            
+            # Bucle interno de PAUSA y VERIFICACIÓN
+            while True:
+                PAUSE_TIME = 15 # Tiempo de espera para el reintento de conexión (en segundos)
+                print(f"Pausando por {PAUSE_TIME} segundos. Verificando conexión...")
+                time.sleep(PAUSE_TIME)
+                
+                # Intenta verificar la conexión a un sitio confiable (SIN timeout en la verificación)
+                try:
+                    # Intento ligero para verificar la conexión a un sitio confiable.
+                    requests.get("https://1.1.1.1", timeout=10)  # Usamos un timeout corto para evitar esperas largas
+                    print("✅ Conexión reestablecida. Reintentando la solicitud a OpenAlex...")
+                    break # Sale del bucle de pausa y vuelve a intentar la solicitud principal
+                except (ConnectionError, Timeout)   :
+                    print("❌ Conexión aún no reestablecida o chequeo muy lento. Volviendo a pausar...")
+                    # Agregamos este 'except' para evitar que una conexión muy lenta en el chequeo nos saque del bucle
         
-        # Información bibliográfica
-        bibliographic_info = data.get("biblio", {})
-        orcids = ["NO ORCID" if not orcid else orcid for orcid in orcids]
-        
-        return {
-            #"authors": "; ".join(filter(None, authors)),  # Filtra valores None
-            "authors": authors,
-            "doi": doi,
-            "SR_ref": sr_ref,
-            "CR_ref": cr_ref,
-            "year": year,
-            "source_title": source_title,
-            "author_full_names": "; ".join(filter(None, author_full_names)),
-            "journal": source.get("display_name", "N/A"),
-            "year_openalex": publication_year,
-            "abstract": data.get("abstract_inverted_index", "N/A"),
-            "title": title,
-            "volume": bibliographic_info.get("volume", "N/A"),
-            "issue": bibliographic_info.get("issue", "N/A"),
-            "page": f"{bibliographic_info.get('first_page', 'N/A')}-{bibliographic_info.get('last_page', 'N/A')}",
-            "journal_issue_number": bibliographic_info.get("issue", "N/A"),
-            "orcid": "; ".join(filter(None, orcids)),
-            "affiliations": "; ".join(filter(None, affiliations)),
-            "keywords": keywords_str,
-        }
-    
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching data for DOI {doi}: {e}")
-        return None
+        # Manejo de errores HTTP (ej. 404, 429)
+        except HTTPError as e:
+            if e.response.status_code == 404:
+                print(f"DOI no encontrado (404) en OpenAlex para {doi}. Se salta este DOI.")
+                return None 
+            
+            elif e.response.status_code == 429:
+                 print(f"Límite de tasa (429) alcanzado para DOI {doi}. Pausando por 30 segundos...")
+                 time.sleep(30)  # Pausa antes de reintentar
+                 continue
+
+            else:
+                print(f"Error HTTP inesperado ({e.response.status_code}) para DOI {doi}.")
+                return None
+                
+        # Manejo de cualquier otra excepción
+        except Exception as e:
+            print(f"Error desconocido para DOI {doi}: {e}")
+            return None 
 
 def enrich_references_with_openalex(df):
     """
