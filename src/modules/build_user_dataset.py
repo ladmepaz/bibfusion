@@ -405,7 +405,7 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
         except Exception:
             pass
 
-        # Sheet 9: figure_3_coauthor — collaboration network for top-10 productive authors (union of ego networks)
+        # Sheet 9: author_table — top-10 productive authors (main articles)
         try:
             aa_csv = os.path.join(all_dir, "All_ArticleAuthor.csv")
             authors_csv = os.path.join(all_dir, "All_Authors.csv")
@@ -441,7 +441,7 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
                 )
                 top_ids = set(top_series.index.tolist())
 
-                # Sheet 10: figure_3_top10 — table of top-10 authors with IDs and counts
+                # Sheet 10 (renamed): author_table — table of top-10 authors with IDs and counts
                 try:
                     top_df = top_series.reset_index()
                     top_df.columns = [id_col, 'total_main_articles']
@@ -468,62 +468,9 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
                     # Clean and write
                     for c in top_df.columns:
                         top_df[c] = remove_illegal_chars_series(top_df[c])
-                    top_df.to_excel(writer, sheet_name='figure_3_top10', index=False)
+                    top_df.to_excel(writer, sheet_name='author_table', index=False)
                 except Exception:
                     pass
-
-                # Build full coauthor network (all articles, main+refs)
-                from itertools import combinations
-                pair_counts = {}
-                for sr, grp in aa.groupby('SR'):
-                    ids = sorted(set(grp[id_col].dropna().astype(str).tolist()))
-                    if len(ids) < 2:
-                        continue
-                    for a, b in combinations(ids, 2):
-                        # undirected key (min, max)
-                        key = (a, b)
-                        pair_counts[key] = pair_counts.get(key, 0) + 1
-
-                if pair_counts:
-                    import itertools
-                    edges_full = pd.DataFrame(
-                        [(k[0], k[1], w) for k, w in pair_counts.items()],
-                        columns=['from', 'to', 'weight']
-                    )
-
-                    # Ego networks union: induced subgraph on (top_ids ∪ neighbors of top_ids)
-                    adj = {}
-                    for a, b, w in edges_full[['from', 'to', 'weight']].itertuples(index=False):
-                        adj.setdefault(a, set()).add(b)
-                        adj.setdefault(b, set()).add(a)
-                    neighbors = set()
-                    for u in top_ids:
-                        if u in adj:
-                            neighbors.update(adj[u])
-                    node_set = top_ids.union(neighbors)
-                    edges_sub = edges_full[edges_full['from'].isin(node_set) & edges_full['to'].isin(node_set)].copy()
-
-                    # Attach names if available
-                    if os.path.exists(authors_csv):
-                        au = pd.read_csv(authors_csv)
-                        # Preferred display name
-                        disp = 'AuthorFullName' if 'AuthorFullName' in au.columns else (
-                            'AuthorName' if 'AuthorName' in au.columns else None
-                        )
-                        if disp is not None:
-                            # Build map id -> name
-                            id_map = au[[
-                                c for c in [id_col, disp] if c in au.columns
-                            ]].drop_duplicates()
-                            id_map[id_col] = id_map[id_col].astype(str)
-                            name_map = dict(zip(id_map[id_col], id_map[disp]))
-                            edges_sub['from_name'] = edges_sub['from'].map(name_map)
-                            edges_sub['to_name'] = edges_sub['to'].map(name_map)
-
-                    # Clean and write
-                    for c in edges_sub.columns:
-                        edges_sub[c] = remove_illegal_chars_series(edges_sub[c])
-                    edges_sub.to_excel(writer, sheet_name='figure_3_coauthor', index=False)
         except Exception:
             pass
 
