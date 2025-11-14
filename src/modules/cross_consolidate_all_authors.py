@@ -52,7 +52,7 @@ def _best_row(rows: List[pd.Series]) -> pd.Series:
     return sorted(rows, key=score, reverse=True)[0]
 
 
-def cross_consolidate_all_authors(all_dir: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def cross_consolidate_all_authors(all_dir: str, aggressive_name_merge: bool = False) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Consolidate identities in All_Authors.csv across ORCID / OpenAlex / NAME into a single global PersonID.
     - Global PersonID priority: ORCID:XXXX -> OA:A... -> NAME:...
@@ -140,6 +140,80 @@ def cross_consolidate_all_authors(all_dir: str) -> Tuple[pd.DataFrame, pd.DataFr
                     'NameKey': key,
                     'CandidatePIDs': '; '.join(sorted(name_to_pid[key])),
                 })
+
+    # Aggressive NAME -> rich identity merge (optional)
+    if aggressive_name_merge:
+        # Representative name key per existing group
+        pid_rep_name_key: Dict[str, str] = {}
+        for pid, idxs in groups.items():
+            best = _best_row([au.loc[j] for j in idxs])
+            rep = best.get('AuthorFullName', '') or best.get('AuthorName', '')
+            pid_rep_name_key[p] = _ascii_upper(rep) if (p := pid) else ''
+
+        # Article counts per original PersonID from AA (before remap)
+        if 'PersonID' in aa.columns:
+            aa_counts = aa['PersonID'].astype(str).value_counts().to_dict()
+        else:
+            aa_counts = {}
+
+        def has_orcid(pid: str) -> bool:
+            return pid.startswith('ORCID:')
+
+        def has_oa(pid: str) -> bool:
+            return pid.startswith('OA:') or any(_norm_openalex_author(str(au.loc[i].get('OpenAlexAuthorID',''))) for i in groups.get(pid, []))
+
+        def any_email(pid: str) -> bool:
+            for i in groups.get(pid, []):
+                if str(au.loc[i].get('Email','')).strip():
+                    return True
+            return False
+
+        def article_count(pid: str) -> int:
+            # Sum counts for all original orig_pid in this group
+            total = 0
+            for i in groups.get(pid, []):
+                orig = str(au.loc[i, '__orig_pid'])
+                total += aa_counts.get(orig, 0)
+            return total
+
+        name_pids = [pid for pid in list(groups.keys()) if isinstance(pid, str) and pid.startswith('NAME:')]
+        for npid in name_pids:
+            key = pid_rep_name_key.get(npid, '')
+            if not key:
+                continue
+            # candidates: non-NAME groups with same name key
+            cands = [pid for pid, k in pid_rep_name_key.items() if pid != npid and k == key and not pid.startswith('NAME:')]
+            if not cands:
+                continue
+            # score candidates
+            scored = []
+            for pid in cands:
+                sc = 0
+                sc += 100 if has_orcid(pid) else 0
+                sc += 20 if has_oa(pid) else 0
+                sc += 10 if any_email(pid) else 0
+                sc += article_count(pid)
+                scored.append((sc, pid))
+            scored.sort(reverse=True)
+            if not scored:
+                continue
+            best_score, best_pid = scored[0]
+            # tie-breaker: if tie in score and multiple with non-ORCID, skip
+            ties = [pid for sc, pid in scored if sc == best_score]
+            if len(ties) > 1:
+                # prefer ORCID among ties
+                ties_orcid = [pid for pid in ties if has_orcid(pid)]
+                if len(ties_orcid) == 1:
+                    best_pid = ties_orcid[0]
+                else:
+                    # ambiguous; skip merge
+                    continue
+            # merge NAME group npid into best_pid
+            idxs = groups.get(npid, [])
+            if not idxs:
+                continue
+            groups.setdefault(best_pid, []).extend(idxs)
+            del groups[npid]
 
     # Build consolidated authors
     out_rows = []
