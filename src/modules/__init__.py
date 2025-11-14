@@ -55,6 +55,7 @@ from .fill_missing_issn_eissn_with_scimago import fill_missing_issn_eissn_with_s
 from .resolve_duplicate_sourceids import resolve_duplicate_sourceids  # Resolves duplicate source IDs
 from .add_year_and_scimago_info import add_year_and_scimago_info  # Adds year and Scimago info to scimagodb
 from .to_xlsx import export_csvs_as_excel  # Combines CSV files into an Excel file
+from .build_user_dataset import build_user_dataset_from_all  # Build UserDataset.xlsx from All_*.csv (phase 1)
 
 # ==========================
 #  Tree of Science
@@ -115,6 +116,7 @@ __all__ = [
     "resolve_duplicate_sourceids",
     "add_year_and_scimago_info",
     "export_csvs_as_excel",
+    "build_user_dataset_from_all",
     
     # ==========================
     #  Tree of Science
