@@ -56,6 +56,7 @@ from .resolve_duplicate_sourceids import resolve_duplicate_sourceids  # Resolves
 from .add_year_and_scimago_info import add_year_and_scimago_info  # Adds year and Scimago info to scimagodb
 from .to_xlsx import export_csvs_as_excel  # Combines CSV files into an Excel file
 from .build_user_dataset import build_user_dataset_from_all  # Build UserDataset.xlsx from All_*.csv (phase 1)
+from .cross_consolidate_all_authors import cross_consolidate_all_authors  # Cross-source author identity consolidation
 
 # ==========================
 #  Tree of Science
@@ -117,6 +118,7 @@ __all__ = [
     "add_year_and_scimago_info",
     "export_csvs_as_excel",
     "build_user_dataset_from_all",
+    "cross_consolidate_all_authors",
     
     # ==========================
     #  Tree of Science
