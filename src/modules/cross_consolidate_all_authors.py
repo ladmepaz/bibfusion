@@ -202,12 +202,41 @@ def cross_consolidate_all_authors(all_dir: str, aggressive_name_merge: bool = Fa
                 continue
             # score candidates
             scored = []
+            # Precompute SR and coauthors sets for npid
+            def articles_of_pid(pid: str) -> set:
+                s = set()
+                for i in groups.get(pid, []):
+                    orig = str(au.loc[i, '__orig_pid'])
+                    if 'PersonID' in aa.columns:
+                        s.update(aa.loc[aa['PersonID'].astype(str)==orig, 'SR'].astype(str).tolist())
+                return s
+            def coauthors_of_pid(pid: str) -> set:
+                # all PersonIDs (orig) that co-occur with this pid on same SRs
+                arts = articles_of_pid(pid)
+                if not arts:
+                    return set()
+                subset = aa[aa['SR'].astype(str).isin(arts)]
+                return set(subset['PersonID'].astype(str).tolist()) if 'PersonID' in subset.columns else set()
+            def jaccard(a: set, b: set) -> float:
+                if not a and not b:
+                    return 0.0
+                inter = len(a & b)
+                union = len(a | b)
+                return inter/union if union else 0.0
+
+            npid_articles = articles_of_pid(npid)
+            npid_coauthors = coauthors_of_pid(npid)
             for pid in cands:
                 sc = 0
                 sc += 100 if has_orcid(pid) else 0
                 sc += 20 if has_oa(pid) else 0
                 sc += 10 if any_email(pid) else 0
                 sc += article_count(pid)
+                # add overlap signals
+                pid_articles = articles_of_pid(pid)
+                pid_coauthors = coauthors_of_pid(pid)
+                sc += 50 * jaccard(npid_articles, pid_articles)
+                sc += 50 * jaccard(npid_coauthors, pid_coauthors)
                 scored.append((sc, pid))
             scored.sort(reverse=True)
             if not scored:
@@ -309,7 +338,123 @@ def cross_consolidate_all_authors(all_dir: str, aggressive_name_merge: bool = Fa
         if subset:
             aa_out = aa_out.drop_duplicates(subset=subset)
 
-    # Write back (and emit alias/conflicts for traceability)
+    # Build clusters and conflict review (post-merge) for inspection
+    # Representative name signature per PID
+    pid_rep_sig: Dict[str, str] = {}
+    def email_domain(s: str) -> str:
+        if not isinstance(s, str):
+            return ''
+        s = s.strip()
+        if '@' in s:
+            return s.split('@')[-1].lower()
+        return ''
+
+    # Build aux maps for metrics
+    # Article sets and coauthor sets per PID
+    def articles_of_pid_final(pid: str) -> set:
+        s = set()
+        for i in groups.get(pid, []):
+            orig = str(au.loc[i, '__orig_pid'])
+            if 'PersonID' in aa.columns:
+                s.update(aa.loc[aa['PersonID'].astype(str)==orig, 'SR'].astype(str).tolist())
+        return s
+    def coauthors_of_pid_final(pid: str) -> set:
+        arts = articles_of_pid_final(pid)
+        if not arts:
+            return set()
+        subset = aa[aa['SR'].astype(str).isin(arts)]
+        return set(subset['PersonID'].astype(str).tolist()) if 'PersonID' in subset.columns else set()
+    def orcid_of_pid(pid: str) -> str:
+        if pid.startswith('ORCID:'):
+            return pid
+        for i in groups.get(pid, []):
+            oc = _norm_orcid(str(au.loc[i, 'Orcid']))
+            if oc:
+                return 'ORCID:' + oc
+        return ''
+    # Representative email domain
+    pid_email_domain: Dict[str, str] = {}
+
+    # Build name signature map
+    for pid, idxs in groups.items():
+        best = _best_row([au.loc[j] for j in idxs])
+        rep = best.get('AuthorFullName', '') or best.get('AuthorName', '')
+        pid_rep_sig[pid] = _name_signature(rep)
+        # email domain
+        dom = ''
+        for j in idxs:
+            d = email_domain(str(au.loc[j].get('Email','')))
+            if d:
+                dom = d; break
+        pid_email_domain[pid] = dom
+
+    # Build clusters table
+    cluster_rows: List[Dict[str, str]] = []
+    for pid, idxs in groups.items():
+        cluster_id = 'CLUSTER:' + pid_rep_sig.get(pid, '')
+        fullname = ''
+        orcid_url = ''
+        oa_ids: List[str] = []
+        for j in idxs:
+            r = au.loc[j]
+            if not fullname:
+                fullname = str(r.get('AuthorFullName','') or r.get('AuthorName',''))
+            oc = _norm_orcid(str(r.get('Orcid','')))
+            if oc:
+                orcid_url = f'https://orcid.org/{oc}'
+            oid = _norm_openalex_author(str(r.get('OpenAlexAuthorID','')))
+            if oid:
+                oa_ids.append('https://openalex.org/' + oid)
+        arts = articles_of_pid_final(pid)
+        cluster_rows.append({
+            'ClusterID': cluster_id,
+            'PersonID': pid,
+            'AuthorFullName': fullname,
+            'Orcid': orcid_url,
+            'OpenAlexAuthorID': '; '.join(sorted(set(oa_ids))) if oa_ids else '',
+            'Articles': len(arts),
+            'EmailDomain': pid_email_domain.get(pid, ''),
+        })
+
+    # Build conflicts review: within same signature, produce pairs with metrics
+    review_rows: List[Dict[str, str]] = []
+    from itertools import combinations
+    # Group pids by signature
+    sig_to_pids: Dict[str, List[str]] = {}
+    for p, sig in pid_rep_sig.items():
+        sig_to_pids.setdefault(sig, []).append(p)
+    def jaccard(a: set, b: set) -> float:
+        if not a and not b:
+            return 0.0
+        inter = len(a & b)
+        union = len(a | b)
+        return inter/union if union else 0.0
+    for sig, pids in sig_to_pids.items():
+        if len(pids) < 2:
+            continue
+        for a_pid, b_pid in combinations(pids, 2):
+            if a_pid == b_pid:
+                continue
+            # Metrics
+            a_orcid = orcid_of_pid(a_pid)
+            b_orcid = orcid_of_pid(b_pid)
+            arts_a = articles_of_pid_final(a_pid)
+            arts_b = articles_of_pid_final(b_pid)
+            co_a = coauthors_of_pid_final(a_pid)
+            co_b = coauthors_of_pid_final(b_pid)
+            review_rows.append({
+                'NameSignature': sig,
+                'PID_A': a_pid,
+                'PID_B': b_pid,
+                'ORCID_A': a_orcid,
+                'ORCID_B': b_orcid,
+                'Articles_A': len(arts_a),
+                'Articles_B': len(arts_b),
+                'Jaccard_Articles': round(jaccard(arts_a, arts_b), 3),
+                'Jaccard_Coauthors': round(jaccard(co_a, co_b), 3),
+                'EmailDomain_A': pid_email_domain.get(a_pid, ''),
+                'EmailDomain_B': pid_email_domain.get(b_pid, ''),
+            })
     authors_out.to_csv(authors_csv, index=False)
     aa_out.to_csv(aa_csv, index=False)
     try:
@@ -317,6 +462,10 @@ def cross_consolidate_all_authors(all_dir: str, aggressive_name_merge: bool = Fa
             pd.DataFrame(alias_rows).to_csv(os.path.join(all_dir, 'All_AuthorAlias.csv'), index=False)
         if conflicts:
             pd.DataFrame(conflicts).to_csv(os.path.join(all_dir, 'All_AuthorConflicts.csv'), index=False)
+        if cluster_rows:
+            pd.DataFrame(cluster_rows).to_csv(os.path.join(all_dir, 'All_AuthorClusters.csv'), index=False)
+        if review_rows:
+            pd.DataFrame(review_rows).to_csv(os.path.join(all_dir, 'All_AuthorConflictsReview.csv'), index=False)
     except Exception:
         pass
 
