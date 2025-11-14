@@ -310,4 +310,43 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
         except Exception:
             pass
 
+        # Sheet 8: figure_2_country — country co-occurrence network for main articles
+        try:
+            if 'SR' in df.columns:
+                # Filter main articles again
+                if 'ismainarticle' in df.columns:
+                    col = df['ismainarticle']
+                    is_main = col if pd.api.types.is_bool_dtype(col) else (col.astype(str).str.upper().eq('TRUE') | col.astype(str).eq('1'))
+                else:
+                    is_main = pd.Series([False] * len(df))
+
+                df_main = df[is_main].copy()
+                # Country column (support alternative casing)
+                country_col = 'country' if 'country' in df_main.columns else ('Country' if 'Country' in df_main.columns else None)
+                if country_col is not None:
+                    rows = []
+                    import re
+                    from itertools import combinations
+                    for _, r in df_main.iterrows():
+                        sr = r.get('SR', None)
+                        raw = r.get(country_col, '')
+                        if pd.isna(raw) or str(raw).strip() == '':
+                            continue
+                        # Split by comma or semicolon
+                        parts = re.split(r"[;,]", str(raw))
+                        # Normalize and deduplicate within the article
+                        countries = sorted({p.strip().upper() for p in parts if p and p.strip()})
+                        if len(countries) < 2:
+                            continue
+                        for a, b in combinations(countries, 2):
+                            rows.append({'from': a, 'to': b, 'SR': sr})
+                    if rows:
+                        net_df = pd.DataFrame(rows)
+                        # Clean
+                        for c in net_df.columns:
+                            net_df[c] = remove_illegal_chars_series(net_df[c])
+                        net_df.to_excel(writer, sheet_name='figure_2_country', index=False)
+        except Exception:
+            pass
+
     return out_path
