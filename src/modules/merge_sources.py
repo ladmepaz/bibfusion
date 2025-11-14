@@ -28,10 +28,7 @@ def _drop_duplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Drop duplicated column names keeping the first occurrence."""
     if df is None or df.empty:
         return df
-    # pandas preserves first occurrence; drop duplicates by index
-    _, idx = pd.unique(df.columns, return_index=True)
-    keep_cols = [df.columns[i] for i in sorted(idx)]
-    return df.loc[:, keep_cols]
+    return df.loc[:, ~df.columns.duplicated()]
 
 
 def normalize_doi(doi: str) -> str:
