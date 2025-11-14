@@ -282,4 +282,32 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
             except Exception:
                 pass
 
+        # Sheet 7: figure_1_data — yearly totals for main articles (ismainarticle == TRUE)
+        try:
+            # Robust boolean filter for ismainarticle
+            is_main = False
+            if 'ismainarticle' in df.columns:
+                col = df['ismainarticle']
+                if pd.api.types.is_bool_dtype(col):
+                    is_main = col
+                else:
+                    is_main = col.astype(str).str.upper().eq('TRUE') | col.astype(str).eq('1')
+            else:
+                is_main = pd.Series([False] * len(df))
+
+            years = pd.to_numeric(df.get('year', pd.Series([None] * len(df))), errors='coerce').astype('Int64')
+            main_years = years[is_main]
+            if main_years.notna().any():
+                ymin = int(main_years.min())
+                ymax = int(main_years.max())
+                full_range = list(range(ymin, ymax + 1))
+                counts = main_years.value_counts().reindex(full_range, fill_value=0).sort_index(ascending=False)
+                fig_df = pd.DataFrame({'year': counts.index, 'total': counts.values})
+                # Clean and write
+                for c in fig_df.columns:
+                    fig_df[c] = remove_illegal_chars_series(fig_df[c])
+                fig_df.to_excel(writer, sheet_name="figure_1_data", index=False)
+        except Exception:
+            pass
+
     return out_path
