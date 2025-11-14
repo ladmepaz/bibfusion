@@ -161,6 +161,16 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
         # Ensure unique articles in user-facing sheet
         if 'SR' in sheet_main.columns:
             sheet_main = sheet_main.drop_duplicates(subset=['SR'])
+        # Add normalized helper columns for display (uppercased ASCII)
+        try:
+            if 'title' in sheet_main.columns:
+                sheet_main['title_norm'] = sheet_main['title'].apply(_ascii_upper)
+            # Journal normalization: prefer 'journal', else 'source_title'
+            jcol = 'journal' if 'journal' in sheet_main.columns else ('source_title' if 'source_title' in sheet_main.columns else None)
+            if jcol is not None:
+                sheet_main['journal_norm'] = sheet_main[jcol].apply(_ascii_upper)
+        except Exception:
+            pass
         sheet_main.to_excel(writer, sheet_name="wos_scopus", index=False)
 
         # Try to locate WoS_results raw first-load CSV to provide a 1:1 count reference
@@ -229,6 +239,16 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
                             else:
                                 keep.append(True)
                         joined = joined.loc[:, keep]
+
+                # Add normalized columns for display
+                try:
+                    if 'title' in joined.columns:
+                        joined['title_norm'] = joined['title'].apply(_ascii_upper)
+                    jcol = 'journal' if 'journal' in joined.columns else ('source_title' if 'source_title' in joined.columns else None)
+                    if jcol is not None:
+                        joined['journal_norm'] = joined[jcol].apply(_ascii_upper)
+                except Exception:
+                    pass
 
                 # Clean illegal characters
                 for c in joined.columns:
