@@ -180,4 +180,49 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
                 scopus_raw.to_excel(writer, sheet_name="scopus", index=False)
                 break
 
+        # Build reference_df: All_Citation with metadata of referenced items (from All_Articles)
+        citation_csv = os.path.join(all_dir, "All_Citation.csv")
+        if os.path.exists(citation_csv):
+            try:
+                citations = pd.read_csv(citation_csv)
+                # Keep only SR and SR_ref from citations
+                edges = citations[['SR', 'SR_ref']].copy()
+
+                # Join reference metadata by matching SR_ref -> Articles.SR
+                # Use the already loaded (possibly enriched) articles df
+                articles_meta = df.copy()
+                joined = edges.merge(articles_meta, how='left', left_on='SR_ref', right_on='SR')
+
+                # Drop duplicate SR column from the right side; keep left SR and SR_ref
+                if 'SR_y' in joined.columns:
+                    joined = joined.drop(columns=['SR_y'])
+                    joined = joined.rename(columns={'SR_x': 'SR'})
+                else:
+                    # If merge didn't suffix, simply drop the right SR
+                    cols = list(joined.columns)
+                    # Remove the last occurrence of 'SR' if there are two
+                    if cols.count('SR') > 1:
+                        # Drop the column named 'SR' that corresponds to articles_meta
+                        # Identify by index: keep the first occurrence
+                        first = True
+                        keep = []
+                        for c in cols:
+                            if c == 'SR':
+                                if first:
+                                    keep.append(True); first = False
+                                else:
+                                    keep.append(False)
+                            else:
+                                keep.append(True)
+                        joined = joined.loc[:, keep]
+
+                # Clean illegal characters
+                for c in joined.columns:
+                    joined[c] = remove_illegal_chars_series(joined[c])
+
+                joined.to_excel(writer, sheet_name="reference_df", index=False)
+            except Exception:
+                # If anything goes wrong, skip creating this sheet silently
+                pass
+
     return out_path
