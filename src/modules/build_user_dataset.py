@@ -158,6 +158,9 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
         helper_cols = ['__issn_norm', '__eissn_norm', '__title_key', '__year']
         sheet_cols_drop = [c for c in helper_cols + ['ismainarticle'] if c in articles_all.columns]
         sheet_main = articles_all[is_main].drop(columns=sheet_cols_drop, errors='ignore')
+        # Ensure unique articles in user-facing sheet
+        if 'SR' in sheet_main.columns:
+            sheet_main = sheet_main.drop_duplicates(subset=['SR'])
         sheet_main.to_excel(writer, sheet_name="wos_scopus", index=False)
 
         # Try to locate WoS_results raw first-load CSV to provide a 1:1 count reference
