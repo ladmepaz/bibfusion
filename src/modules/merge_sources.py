@@ -14,6 +14,26 @@ def _ascii_upper(text: str) -> str:
     return stripped.upper().strip()
 
 
+def _normalize_issn(value: str) -> str:
+    """Return ISSN in canonical NNNN-NNNN form or '' if invalid."""
+    if not isinstance(value, str):
+        return ''
+    digits = ''.join(ch for ch in value if ch.isdigit())
+    if len(digits) != 8:
+        return ''
+    return f"{digits[:4]}-{digits[4:]}"
+
+
+def _drop_duplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Drop duplicated column names keeping the first occurrence."""
+    if df is None or df.empty:
+        return df
+    # pandas preserves first occurrence; drop duplicates by index
+    _, idx = pd.unique(df.columns, return_index=True)
+    keep_cols = [df.columns[i] for i in sorted(idx)]
+    return df.loc[:, keep_cols]
+
+
 def normalize_doi(doi: str) -> str:
     if not isinstance(doi, str):
         return ''
@@ -228,6 +248,126 @@ def merge_affiliation(
     return combined
 
 
+def _best_row_by_fields(rows: List[pd.Series], priority_fields: List[str]) -> pd.Series:
+    def score(r):
+        return sum(1 for c in priority_fields if c in r.index and pd.notna(r[c]) and str(r[c]).strip() != '')
+    return sorted(rows, key=score, reverse=True)[0]
+
+
+def merge_journal(wos_journal: pd.DataFrame, scopus_journal: pd.DataFrame) -> pd.DataFrame:
+    """Merge WoS and Scopus Journal tables into a single deduplicated DataFrame.
+    Deduplicate primarily by journal_id when present, otherwise by normalized title.
+    """
+    w = wos_journal.copy() if wos_journal is not None else pd.DataFrame()
+    s = scopus_journal.copy() if scopus_journal is not None else pd.DataFrame()
+    combined = pd.concat([x for x in [w, s] if x is not None], ignore_index=True, sort=False)
+    if combined.empty:
+        return combined
+
+    # Normalize keys
+    if 'source_title' not in combined.columns and 'journal' in combined.columns:
+        combined['source_title'] = combined['journal']
+    combined['__title_key'] = combined.get('source_title', '').apply(_ascii_upper)
+    # Ensure journal_id exists (may be missing on some pipelines)
+    if 'journal_id' in combined.columns:
+        # Deduplicate by journal_id first
+        by_id = []
+        for _, grp in combined.groupby('journal_id', dropna=False):
+            row = _best_row_by_fields([r for _, r in grp.iterrows()],
+                                      ['source_title', 'journal', 'journal_id'])
+            by_id.append(row)
+        combined = pd.DataFrame(by_id)
+
+    # Next, dedupe by title key
+    out = []
+    for _, grp in combined.groupby('__title_key'):
+        row = _best_row_by_fields([r for _, r in grp.iterrows()],
+                                  ['source_title', 'journal', 'journal_id'])
+        out.append(row)
+    result = pd.DataFrame(out)
+    result = result.drop(columns=['__title_key'], errors='ignore')
+    return result.reset_index(drop=True)
+
+
+def merge_scimagodb(wos_sci: pd.DataFrame, scopus_sci: pd.DataFrame) -> pd.DataFrame:
+    """Merge WoS and Scopus ScimagoDB tables. Prefer dedup by ISSN/eISSN; fallback by Title.
+    Handles duplicate 'year' columns gracefully.
+    """
+    w = _drop_duplicate_columns(wos_sci.copy()) if wos_sci is not None else pd.DataFrame()
+    s = _drop_duplicate_columns(scopus_sci.copy()) if scopus_sci is not None else pd.DataFrame()
+    combined = pd.concat([x for x in [w, s] if x is not None], ignore_index=True, sort=False)
+    if combined.empty:
+        return combined
+
+    # Standardize column names
+    # Use Title/Issn/eIssn variants when available
+    # Title
+    title_col = None
+    for c in ['Title', 'title', 'Journal', 'journal']:
+        if c in combined.columns:
+            title_col = c
+            break
+    if title_col is None:
+        combined['Title'] = ''
+        title_col = 'Title'
+    # ISSN / eISSN
+    issn_col = 'Issn' if 'Issn' in combined.columns else ('ISSN' if 'ISSN' in combined.columns else None)
+    eissn_col = 'eIssn' if 'eIssn' in combined.columns else ('EISSN' if 'EISSN' in combined.columns else None)
+    combined['__issn_norm'] = combined[issn_col].apply(_normalize_issn) if issn_col else ''
+    combined['__eissn_norm'] = combined[eissn_col].apply(_normalize_issn) if eissn_col else ''
+    combined['__title_key'] = combined[title_col].apply(_ascii_upper)
+
+    # Group by ISSN first (either issn or eissn matches)
+    used_idx = set()
+    rows: List[pd.Series] = []
+
+    # Index by issn/eissn
+    def idx_by(col):
+        m = {}
+        if col in combined.columns:
+            for i, v in combined[col].items():
+                if isinstance(v, str) and v:
+                    m.setdefault(v, []).append(i)
+        return m
+    idx_issn = idx_by('__issn_norm')
+    idx_eissn = idx_by('__eissn_norm')
+
+    def pick_best(indices: List[int]):
+        grp = combined.loc[indices]
+        return _best_row_by_fields([r for _, r in grp.iterrows()],
+                                   ['SJR', 'SJR Best Quartile', 'H index', 'Publisher', 'Country', 'Issn', 'eIssn'])
+
+    # Merge identical ISSN
+    for key, indices in idx_issn.items():
+        if key == '':
+            continue
+        best = pick_best(indices)
+        rows.append(best)
+        used_idx.update(indices)
+
+    # Merge identical eISSN not already used
+    for key, indices in idx_eissn.items():
+        remaining = [i for i in indices if i not in used_idx]
+        if key == '' or not remaining:
+            continue
+        best = pick_best(remaining)
+        rows.append(best)
+        used_idx.update(remaining)
+
+    # Remaining rows without ISSN/eISSN: group by title key
+    remaining_idx = [i for i in range(len(combined)) if i not in used_idx]
+    if remaining_idx:
+        rem = combined.loc[remaining_idx]
+        for _, grp in rem.groupby('__title_key'):
+            best = _best_row_by_fields([r for _, r in grp.iterrows()],
+                                       ['SJR', 'SJR Best Quartile', 'H index', 'Publisher', 'Country', 'Title'])
+            rows.append(best)
+
+    result = pd.DataFrame(rows)
+    result = result.drop(columns=['__issn_norm', '__eissn_norm', '__title_key'], errors='ignore')
+    return result.reset_index(drop=True)
+
+
 def merge_from_outputs(wos_dir: str, scopus_dir: str, out_dir: str) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Convenience wrapper that reads outputs from WoS_results and Scopus_results directories and writes All_* CSVs.
@@ -308,10 +448,41 @@ def merge_all_entities(wos_dir: str, scopus_dir: str, out_dir: str) -> Dict[str,
     all_aff = merge_affiliation(wos_aff, scopus_aff, wos_article, scopus_article, doi_map)
     all_aff.to_csv(f"{out_dir}/All_Affiliation.csv", index=False)
 
-    return {
+    # Journal
+    try:
+        wos_journal = pd.read_csv(f"{wos_dir}/Journal.csv")
+    except Exception:
+        wos_journal = pd.DataFrame()
+    try:
+        scopus_journal = pd.read_csv(f"{scopus_dir}/Journal.csv")
+    except Exception:
+        scopus_journal = pd.DataFrame()
+    all_journal = merge_journal(wos_journal, scopus_journal)
+    if not all_journal.empty:
+        all_journal.to_csv(f"{out_dir}/All_Journal.csv", index=False)
+
+    # ScimagoDB
+    try:
+        wos_scimago = pd.read_csv(f"{wos_dir}/scimagodb.csv")
+    except Exception:
+        wos_scimago = pd.DataFrame()
+    try:
+        scopus_scimago = pd.read_csv(f"{scopus_dir}/scimagodb.csv")
+    except Exception:
+        scopus_scimago = pd.DataFrame()
+    all_scimago = merge_scimagodb(wos_scimago, scopus_scimago)
+    if not all_scimago.empty:
+        all_scimago.to_csv(f"{out_dir}/All_Scimagodb.csv", index=False)
+
+    result = {
         'All_Articles': all_articles,
         'All_Authors': all_authors,
         'All_ArticleAuthor': all_articleauthor,
         'All_Citation': all_citation,
         'All_Affiliation': all_aff,
     }
+    if 'all_journal' in locals():
+        result['All_Journal'] = all_journal
+    if 'all_scimago' in locals():
+        result['All_Scimagodb'] = all_scimago
+    return result
