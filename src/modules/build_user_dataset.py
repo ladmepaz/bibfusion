@@ -109,8 +109,8 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
                 articles_all = merged
 
                 # Position Quartile next to 'journal' if present
-                if 'Quartile' in df.columns:
-                    cols = list(df.columns)
+                if 'Quartile' in articles_all.columns:
+                    cols = list(articles_all.columns)
                     # Remove duplicates of Quartile if any accidental merges created them
                     # Ensure single 'Quartile'
                     # Rebuild with first occurrence only
@@ -119,7 +119,7 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
                     for c in cols:
                         if c not in seen:
                             cols_unique.append(c); seen.add(c)
-                    df = df[cols_unique]
+                    articles_all = articles_all[cols_unique]
 
                     try:
                         if 'journal' in articles_all.columns:
@@ -143,8 +143,8 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
                         pass
 
     # Clean illegal characters per column to avoid Excel write errors
-    for col in df.columns:
-        df[col] = remove_illegal_chars_series(df[col])
+    for col in articles_all.columns:
+        articles_all[col] = remove_illegal_chars_series(articles_all[col])
 
     # Write Excel with sheet 'wos_scopus' and (if available) raw WoS sheet 'wos'
     with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
