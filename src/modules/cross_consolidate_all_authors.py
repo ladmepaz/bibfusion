@@ -14,6 +14,17 @@ def _ascii_upper(text: str) -> str:
     return stripped.upper().strip()
 
 
+def _name_signature(text: str) -> str:
+    """Robust name key: ASCII upper, split on non-letters, sort tokens."""
+    s = _ascii_upper(text)
+    # Keep A-Z and spaces
+    import re as _re
+    s = _re.sub(r"[^A-Z]+", " ", s)
+    tokens = [t for t in s.split() if t]
+    tokens.sort()
+    return ' '.join(tokens)
+
+
 _ORCID_RE = re.compile(r"(\d{4}-\d{4}-\d{4}-\d{3}[0-9Xx])")
 
 
@@ -85,6 +96,7 @@ def cross_consolidate_all_authors(all_dir: str, aggressive_name_merge: bool = Fa
     au.loc[mask_pid_oa, '__oa_norm'] = au.loc[mask_pid_oa, '__orig_pid'].apply(_norm_openalex_author)
 
     au['__name_key'] = au.get('AuthorFullName', au.get('AuthorName', '')).apply(_ascii_upper)
+    au['__name_sig'] = au.get('AuthorFullName', au.get('AuthorName', '')).apply(_name_signature)
 
     # 1) ORCID groups -> ORCID:XXXX
     groups: Dict[str, List[int]] = {}
@@ -143,12 +155,14 @@ def cross_consolidate_all_authors(all_dir: str, aggressive_name_merge: bool = Fa
 
     # Aggressive NAME -> rich identity merge (optional)
     if aggressive_name_merge:
-        # Representative name key per existing group
+        # Representative name key/signature per existing group
         pid_rep_name_key: Dict[str, str] = {}
+        pid_rep_name_sig: Dict[str, str] = {}
         for pid, idxs in groups.items():
             best = _best_row([au.loc[j] for j in idxs])
             rep = best.get('AuthorFullName', '') or best.get('AuthorName', '')
             pid_rep_name_key[p] = _ascii_upper(rep) if (p := pid) else ''
+            pid_rep_name_sig[p] = _name_signature(rep)
 
         # Article counts per original PersonID from AA (before remap)
         if 'PersonID' in aa.columns:
@@ -181,8 +195,9 @@ def cross_consolidate_all_authors(all_dir: str, aggressive_name_merge: bool = Fa
             key = pid_rep_name_key.get(npid, '')
             if not key:
                 continue
-            # candidates: non-NAME groups with same name key
-            cands = [pid for pid, k in pid_rep_name_key.items() if pid != npid and k == key and not pid.startswith('NAME:')]
+            # candidates: non-NAME groups with same name key OR same signature (more robust)
+            key_sig = pid_rep_name_sig.get(npid, '')
+            cands = [pid for pid, k in pid_rep_name_key.items() if pid != npid and not pid.startswith('NAME:') and (k == key or pid_rep_name_sig.get(pid,'') == key_sig)]
             if not cands:
                 continue
             # score candidates
