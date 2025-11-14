@@ -30,6 +30,7 @@ from .scopus_csv_to_df import scopus_csv_to_df  # Converts Scopus .csv files to 
 from .merge_scopus_ref import merge_scopus_ref  # Merges Scopus references
 from .get_scopus_author_data import get_scopus_author_data  # Gets author data from Scopus
 from .enrich_scopus_author_data import enrich_scopus_author_data  # Enriches author data
+from .enrich_scopus_with_openalex_authors import enrich_scopus_with_openalex_authors  # Enrich Scopus authors via OpenAlex
 from .get_openalex_data import (
     generate_references_column,
     generate_SR_ref,
@@ -129,3 +130,8 @@ __all__ = [
     "add_tos_to_data_excel"
 
 ]
+
+from .merge_sources import (normalize_doi as normalize_cross_doi, merge_articles, merge_authors, merge_from_outputs)
+
+
+from .merge_sources import merge_all_entities

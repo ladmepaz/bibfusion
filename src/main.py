@@ -516,6 +516,10 @@ def preprocesing_df(path_wos=None,path_scopus=None):
     return None
 
 # preprocesing_df(r"path_wos" or [r"path_wos",r"path_wos_2"], r"path_scopus")
-preprocesing_df(
-                  r"C:\Users\User\OneDrive\Documentos\Preprocessing\preprocessing_4\preprocessing\EM_190.txt",
-                  )
+if __name__ == "__main__":
+    # Example/manual run (disabled by default)
+    # preprocesing_df(
+    #   path_wos=[r"C:\\path\\to\\wos.txt"],
+    #   path_scopus=r"C:\\path\\to\\scopus.csv"
+    # )
+    pass

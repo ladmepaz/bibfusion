@@ -117,4 +117,22 @@ def get_scopus_author_data(df_original):
     
     # Creamos el DataFrame final
     df_autores = pd.DataFrame(datos_autores)
+
+    # Añadir OpenAlexAuthorID y openalex_work_id alineados por SR y AuthorOrder si existen en df_original
+    try:
+        rows = []
+        for _, r in df_original.iterrows():
+            sr0 = r.get('SR')
+            work_id = r.get('openalex_work_id') if 'openalex_work_id' in df_original.columns else ''
+            oa_list = []
+            if 'author_id_openalex' in df_original.columns and pd.notna(r.get('author_id_openalex')):
+                oa_list = [a.strip() for a in str(r.get('author_id_openalex')).split(';') if str(a).strip()]
+            for i, _ in enumerate(str(r.get('author') or '').split('; ')):
+                rows.append({'SR': sr0, 'AuthorOrder': i+1, 'OpenAlexAuthorID': oa_list[i] if i < len(oa_list) else '', 'openalex_work_id': work_id})
+        if rows:
+            oa_df = pd.DataFrame(rows)
+            df_autores = df_autores.merge(oa_df, on=['SR','AuthorOrder'], how='left')
+    except Exception:
+        pass
+
     return df_autores

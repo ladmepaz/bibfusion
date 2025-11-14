@@ -120,6 +120,92 @@ def consolidate_authors(author_df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataF
             })
     author_alias = pd.DataFrame(alias_rows)
 
+    # --- Attachment pass: fold NAME-only aliases into ORCID groups ---
+    try:
+        # Enrich alias with normalized name key and normalized orcid
+        alias_enriched = author_alias.merge(
+            df[['AuthorID', '__name_key', '__orcid']], on='AuthorID', how='left'
+        )
+        # Also compute short OpenAlex id from the alias column
+        alias_enriched['__oa_short'] = alias_enriched['OpenAlexAuthorID'].astype(str).apply(_short_openalex)
+
+        # Map name_key -> unique ORCID PersonID (only if exactly one)
+        orcid_alias = alias_enriched[alias_enriched['PersonID'].astype(str).str.startswith('ORCID:')]
+        nk_to_orcid_pid = (
+            orcid_alias.groupby('__name_key')['PersonID']
+            .nunique()
+            .rename('count')
+            .to_frame()
+            .join(orcid_alias.groupby('__name_key')['PersonID'].agg(lambda s: next(iter(set(s))))
+                  .rename('pid'))
+        )
+        # Rows with NAME-based PersonID and no ORCID
+        mask_name_only = (
+            alias_enriched['PersonID'].astype(str).str.startswith('NAME:') &
+            (alias_enriched['__orcid'].astype(str) == '') &
+            alias_enriched['__name_key'].astype(str).ne('')
+        )
+        def resolve_pid(row):
+            nk = row['__name_key']
+            if nk in nk_to_orcid_pid.index and nk_to_orcid_pid.at[nk, 'count'] == 1:
+                return nk_to_orcid_pid.at[nk, 'pid']
+            return row['PersonID']
+        alias_enriched.loc[mask_name_only, 'PersonID'] = alias_enriched.loc[mask_name_only].apply(resolve_pid, axis=1)
+
+        # Additional rule: if NAME-only shares an OpenAlex ID with an ORCID-mapped person, adopt that ORCID PersonID
+        # Build oa_short -> unique ORCID PersonID map
+        oa_to_orcid_pid = (
+            orcid_alias[orcid_alias['__oa_short'].astype(str).ne('')]
+            .groupby('__oa_short')['PersonID']
+            .nunique()
+            .rename('count')
+            .to_frame()
+            .join(
+                orcid_alias.groupby('__oa_short')['PersonID'].agg(lambda s: next(iter(set(s))))
+                .rename('pid')
+            )
+        )
+        def resolve_pid_by_oa(row):
+            if not (isinstance(row['PersonID'], str) and row['PersonID'].startswith('NAME:')):
+                return row['PersonID']
+            oa = row['__oa_short']
+            if oa in oa_to_orcid_pid.index and oa_to_orcid_pid.at[oa, 'count'] == 1:
+                return oa_to_orcid_pid.at[oa, 'pid']
+            return row['PersonID']
+        alias_enriched['PersonID'] = alias_enriched.apply(resolve_pid_by_oa, axis=1)
+        # Replace author_alias with resolved version; additionally, fold NAME-only by full-name match to a unique ORCID person
+        try:
+            tmp = alias_enriched.copy()
+            tmp['__full_norm'] = tmp['AuthorFullName'].astype(str).apply(_ascii_upper)
+            full_to_orcid = (
+                tmp[tmp['PersonID'].astype(str).str.startswith('ORCID:')]
+                .groupby('__full_norm')['PersonID']
+                .nunique()
+                .rename('count')
+                .to_frame()
+                .join(
+                    tmp[tmp['PersonID'].astype(str).str.startswith('ORCID:')]
+                    .groupby('__full_norm')['PersonID']
+                    .agg(lambda s: next(iter(set(s))))
+                    .rename('pid')
+                )
+            )
+            def resolve_pid_by_full(row):
+                if not (isinstance(row['PersonID'], str) and row['PersonID'].startswith('NAME:')):
+                    return row['PersonID']
+                fn = row['__full_norm']
+                if fn in full_to_orcid.index and full_to_orcid.at[fn, 'count'] == 1:
+                    return full_to_orcid.at[fn, 'pid']
+                return row['PersonID']
+            alias_enriched['PersonID'] = alias_enriched.apply(resolve_pid_by_full, axis=1)
+        except Exception:
+            pass
+
+        author_alias = alias_enriched.drop(columns=['__name_key', '__orcid', '__oa_short', '__full_norm'], errors='ignore')
+    except Exception:
+        # Best effort; keep original alias if anything fails
+        pass
+
     # Build author_person aggregation
     person_rows: List[dict] = []
     for pid, g in author_alias.groupby('PersonID'):
@@ -163,4 +249,3 @@ def consolidate_authors(author_df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataF
 def consolidate_authors_from_csv(path: str) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     df = pd.read_csv(path)
     return consolidate_authors(df)
-
