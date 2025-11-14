@@ -145,8 +145,26 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
     for col in df.columns:
         df[col] = remove_illegal_chars_series(df[col])
 
-    # Write Excel with a single sheet 'wos_scopus'
+    # Write Excel with sheet 'wos_scopus' and (if available) raw WoS sheet 'wos'
     with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
         df.to_excel(writer, sheet_name="wos_scopus", index=False)
+
+        # Try to locate WoS_results raw first-load CSV to provide a 1:1 count reference
+        # Typical layout: <base>/WoS_results/1_temp_wos_df.csv and <base>/all_data_wos_scopus/
+        base_dir = os.path.abspath(os.path.join(all_dir, os.pardir))
+        wos_dir = os.path.join(base_dir, "WoS_results")
+        wos_raw_candidates = [
+            os.path.join(wos_dir, "1_temp_wos_df.csv"),
+            os.path.join(wos_dir, "1_temp_wos_df.csv"),  # same, kept for clarity/future variants
+        ]
+        for p in wos_raw_candidates:
+            if os.path.exists(p):
+                wos_raw = pd.read_csv(p)
+                # Clean illegal characters
+                for col in wos_raw.columns:
+                    wos_raw[col] = remove_illegal_chars_series(wos_raw[col])
+                # Sheet name 'wos' as requested
+                wos_raw.to_excel(writer, sheet_name="wos", index=False)
+                break
 
     return out_path
