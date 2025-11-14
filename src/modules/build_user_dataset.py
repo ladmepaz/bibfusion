@@ -225,4 +225,38 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
                 # If anything goes wrong, skip creating this sheet silently
                 pass
 
+        # Build journal_df: SR, JournalMain, YearMain, JournalRef, YearRef
+        if os.path.exists(citation_csv):
+            try:
+                citations = pd.read_csv(citation_csv)
+                edges = citations[['SR', 'SR_ref']].copy()
+
+                articles_meta = df.copy()
+                # Identify journal column in articles
+                art_journal_col = 'journal' if 'journal' in articles_meta.columns else (
+                    'source_title' if 'source_title' in articles_meta.columns else None
+                )
+                # Merge citing (Main)
+                main = edges.merge(articles_meta[['SR', art_journal_col, 'year']], how='left', on='SR')
+                main = main.rename(columns={art_journal_col: 'JournalMain', 'year': 'YearMain'})
+
+                # Merge referenced (Ref)
+                ref = main.merge(articles_meta[['SR', art_journal_col, 'year']], how='left', left_on='SR_ref', right_on='SR', suffixes=('', '_ref'))
+                # Columns after merge: SR (citing), SR_ref, SR_ref's SR as SR_ref merge col
+                # Rename ref columns
+                ref = ref.rename(columns={f'{art_journal_col}_ref': 'JournalRef', 'year_ref': 'YearRef'})
+                if 'SR_ref1' in ref.columns:
+                    # In case pandas created SR_ref1 when both had SR_ref
+                    pass
+                # Keep only requested columns
+                journal_df = ref[['SR', 'JournalMain', 'YearMain', 'JournalRef', 'YearRef']].copy()
+
+                # Clean illegal characters
+                for c in journal_df.columns:
+                    journal_df[c] = remove_illegal_chars_series(journal_df[c])
+
+                journal_df.to_excel(writer, sheet_name="journal_df", index=False)
+            except Exception:
+                pass
+
     return out_path
