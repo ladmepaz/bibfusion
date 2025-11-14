@@ -259,4 +259,27 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
             except Exception:
                 pass
 
+        # Sheet 6: authors_df from All_Authors.csv (ordered columns)
+        authors_csv = os.path.join(all_dir, "All_Authors.csv")
+        if os.path.exists(authors_csv):
+            try:
+                authors = pd.read_csv(authors_csv)
+                desired_cols = [
+                    'PersonID',
+                    'AuthorFullName',
+                    'AuthorName',
+                    'Orcid',
+                    'OpenAlexAuthorID',
+                    'AuthorID',
+                    'ResearcherID',
+                    'Email',
+                ]
+                present = [c for c in desired_cols if c in authors.columns]
+                authors = authors[present]
+                for c in authors.columns:
+                    authors[c] = remove_illegal_chars_series(authors[c])
+                authors.to_excel(writer, sheet_name="authors_df", index=False)
+            except Exception:
+                pass
+
     return out_path
