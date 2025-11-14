@@ -4,7 +4,25 @@ import pandas as pd
 from .to_xlsx import remove_illegal_chars_series
 
 
-def build_user_dataset_from_all(all_dir: str, out_path: str = None) -> str:
+def _ascii_upper(text: str) -> str:
+    if not isinstance(text, str):
+        return ""
+    import unicodedata
+    norm = unicodedata.normalize('NFKD', str(text))
+    stripped = ''.join(ch for ch in norm if not unicodedata.combining(ch))
+    return stripped.upper().strip()
+
+
+def _normalize_issn(value: str) -> str:
+    if not isinstance(value, str):
+        return ''
+    digits = ''.join(ch for ch in value if ch.isdigit())
+    if len(digits) != 8:
+        return ''
+    return f"{digits[:4]}-{digits[4:]}"
+
+
+def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile: bool = True) -> str:
     """
     Create a user-friendly Excel from consolidated All_* CSVs.
 
@@ -29,6 +47,100 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None) -> str:
 
     df = pd.read_csv(articles_csv)
 
+    # Optionally enrich with Scimago quartile (by year)
+    if add_quartile:
+        scimago_csv = os.path.join(all_dir, "All_Scimagodb.csv")
+        if os.path.exists(scimago_csv):
+            sci = pd.read_csv(scimago_csv)
+
+            # Normalize keys in Articles
+            def norm_from_cols(dataf, cols, normfn):
+                for c in cols:
+                    if c in dataf.columns:
+                        return dataf[c].apply(normfn)
+                return pd.Series([''] * len(dataf))
+
+            def title_from_cols(dataf, cols):
+                for c in cols:
+                    if c in dataf.columns:
+                        return dataf[c]
+                return pd.Series([''] * len(dataf))
+
+            df['__issn_norm'] = norm_from_cols(df, ['issn', 'ISSN'], _normalize_issn)
+            df['__eissn_norm'] = norm_from_cols(df, ['eissn', 'EISSN'], _normalize_issn)
+            df['__title_key'] = title_from_cols(df, ['source_title', 'journal', 'source', 'Journal']).apply(_ascii_upper)
+            df['__year'] = pd.to_numeric(df.get('year', pd.Series([None]*len(df))), errors='coerce').astype('Int64')
+
+            # Normalize keys in Scimago
+            sci['__issn_norm'] = norm_from_cols(sci, ['Issn', 'ISSN', 'issn'], _normalize_issn)
+            sci['__eissn_norm'] = norm_from_cols(sci, ['eIssn', 'EISSN', 'eissn'], _normalize_issn)
+            sci['__title_key'] = title_from_cols(sci, ['Title', 'title', 'Journal', 'journal']).apply(_ascii_upper)
+            sci['__year'] = pd.to_numeric(sci.get('year', pd.Series([None]*len(sci))), errors='coerce').astype('Int64')
+
+            # Pick quartile column name
+            quart_col = 'SJR Best Quartile' if 'SJR Best Quartile' in sci.columns else (
+                'Quartile' if 'Quartile' in sci.columns else None
+            )
+            if quart_col is not None:
+                sci_q = sci[['__issn_norm', '__eissn_norm', '__title_key', '__year', quart_col]].copy()
+                sci_q = sci_q.rename(columns={quart_col: 'Quartile'})
+
+                # Merge by ISSN+year
+                merged = df.merge(
+                    sci_q[['__issn_norm', '__year', 'Quartile']].drop_duplicates(),
+                    how='left', on=['__issn_norm', '__year'], suffixes=('', '_q1')
+                )
+                # Fill by eISSN+year where missing
+                aux = df.merge(
+                    sci_q[['__eissn_norm', '__year', 'Quartile']].drop_duplicates(),
+                    how='left', left_on=['__eissn_norm', '__year'], right_on=['__eissn_norm', '__year']
+                )
+                merged['Quartile'] = merged['Quartile'].fillna(aux['Quartile'])
+
+                # Fill by title+year where still missing
+                aux2 = df.merge(
+                    sci_q[['__title_key', '__year', 'Quartile']].drop_duplicates(),
+                    how='left', on=['__title_key', '__year']
+                )
+                merged['Quartile'] = merged['Quartile'].fillna(aux2['Quartile'])
+
+                # If we created a separate merged frame, sync back to df
+                df = merged
+
+                # Position Quartile next to 'journal' if present
+                if 'Quartile' in df.columns:
+                    cols = list(df.columns)
+                    # Remove duplicates of Quartile if any accidental merges created them
+                    # Ensure single 'Quartile'
+                    # Rebuild with first occurrence only
+                    seen = set()
+                    cols_unique = []
+                    for c in cols:
+                        if c not in seen:
+                            cols_unique.append(c); seen.add(c)
+                    df = df[cols_unique]
+
+                    try:
+                        if 'journal' in df.columns:
+                            cols = list(df.columns)
+                            qpos = cols.index('Quartile')
+                            jpos = cols.index('journal')
+                            if qpos != jpos + 1:
+                                cols.pop(qpos)
+                                cols.insert(jpos + 1, 'Quartile')
+                                df = df[cols]
+                        elif 'source_title' in df.columns:
+                            cols = list(df.columns)
+                            qpos = cols.index('Quartile')
+                            spos = cols.index('source_title')
+                            if qpos != spos + 1:
+                                cols.pop(qpos)
+                                cols.insert(spos + 1, 'Quartile')
+                                df = df[cols]
+                    except Exception:
+                        # If any positioning fails, keep as-is
+                        pass
+
     # Clean illegal characters per column to avoid Excel write errors
     for col in df.columns:
         df[col] = remove_illegal_chars_series(df[col])
@@ -38,4 +150,3 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None) -> str:
         df.to_excel(writer, sheet_name="wos_scopus", index=False)
 
     return out_path
-
