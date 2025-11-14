@@ -385,6 +385,37 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
                 )
                 top_ids = set(top_series.index.tolist())
 
+                # Sheet 10: figure_3_top10 — table of top-10 authors with IDs and counts
+                try:
+                    top_df = top_series.reset_index()
+                    top_df.columns = [id_col, 'total_main_articles']
+                    # Attach names and identifiers if available
+                    if os.path.exists(authors_csv):
+                        au = pd.read_csv(authors_csv)
+                        cols_want = [
+                            id_col,
+                            'AuthorFullName',
+                            'AuthorName',
+                            'Orcid',
+                            'OpenAlexAuthorID',
+                            'Email',
+                            'ResearcherID',
+                        ]
+                        cols_present = [c for c in cols_want if c in au.columns]
+                        au2 = au[cols_present].drop_duplicates(subset=[id_col]) if id_col in cols_present else au[cols_present]
+                        au2[id_col] = au2[id_col].astype(str)
+                        top_df[id_col] = top_df[id_col].astype(str)
+                        top_df = top_df.merge(au2, how='left', on=id_col)
+                    # Rank column
+                    top_df = top_df.sort_values(by='total_main_articles', ascending=False).reset_index(drop=True)
+                    top_df.insert(0, 'rank', top_df.index + 1)
+                    # Clean and write
+                    for c in top_df.columns:
+                        top_df[c] = remove_illegal_chars_series(top_df[c])
+                    top_df.to_excel(writer, sheet_name='figure_3_top10', index=False)
+                except Exception:
+                    pass
+
                 # Build full coauthor network (all articles, main+refs)
                 from itertools import combinations
                 pair_counts = {}
