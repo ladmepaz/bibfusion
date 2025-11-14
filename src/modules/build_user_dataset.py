@@ -167,4 +167,17 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
                 wos_raw.to_excel(writer, sheet_name="wos", index=False)
                 break
 
+        # Add Scopus raw first-load CSV if present
+        scopus_dir = os.path.join(base_dir, "Scopus_results")
+        scopus_raw_candidates = [
+            os.path.join(scopus_dir, "1_temp_scopus_df.csv"),
+        ]
+        for p in scopus_raw_candidates:
+            if os.path.exists(p):
+                scopus_raw = pd.read_csv(p)
+                for col in scopus_raw.columns:
+                    scopus_raw[col] = remove_illegal_chars_series(scopus_raw[col])
+                scopus_raw.to_excel(writer, sheet_name="scopus", index=False)
+                break
+
     return out_path
