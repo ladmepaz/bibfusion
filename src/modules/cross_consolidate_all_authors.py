@@ -75,6 +75,7 @@ def cross_consolidate_all_authors(all_dir: str, aggressive_name_merge: bool = Fa
     """
     authors_csv = os.path.join(all_dir, 'All_Authors.csv')
     aa_csv = os.path.join(all_dir, 'All_ArticleAuthor.csv')
+    aff_csv = os.path.join(all_dir, 'All_Affiliation.csv')
 
     if not os.path.exists(authors_csv) or not os.path.exists(aa_csv):
         raise FileNotFoundError('All_Authors.csv or All_ArticleAuthor.csv not found in ' + all_dir)
@@ -457,6 +458,21 @@ def cross_consolidate_all_authors(all_dir: str, aggressive_name_merge: bool = Fa
             })
     authors_out.to_csv(authors_csv, index=False)
     aa_out.to_csv(aa_csv, index=False)
+    # Remap All_Affiliation with global PersonID if available
+    try:
+        if os.path.exists(aff_csv):
+            aff = pd.read_csv(aff_csv)
+            aff_out = aff.copy()
+            if 'PersonID' in aff_out.columns:
+                aff_out['PersonID'] = aff_out['PersonID'].astype(str).map(lambda x: pid_map.get(x, x))
+            elif 'AuthorID' in aff_out.columns:
+                aff_out = aff_out.merge(authors_out[['AuthorID','PersonID']].drop_duplicates(), how='left', on='AuthorID')
+            subset = [c for c in ['SR','PersonID','Affiliation'] if c in aff_out.columns]
+            if subset:
+                aff_out = aff_out.drop_duplicates(subset=subset)
+            aff_out.to_csv(aff_csv, index=False)
+    except Exception:
+        pass
     try:
         if alias_rows:
             pd.DataFrame(alias_rows).to_csv(os.path.join(all_dir, 'All_AuthorAlias.csv'), index=False)
