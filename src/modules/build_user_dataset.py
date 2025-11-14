@@ -316,6 +316,28 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
             except Exception:
                 pass
 
+        # Sheet 11: author_clusters (if available)
+        clusters_csv = os.path.join(all_dir, 'All_AuthorClusters.csv')
+        if os.path.exists(clusters_csv):
+            try:
+                clusters = pd.read_csv(clusters_csv)
+                for c in clusters.columns:
+                    clusters[c] = remove_illegal_chars_series(clusters[c])
+                clusters.to_excel(writer, sheet_name='author_clusters', index=False)
+            except Exception:
+                pass
+
+        # Sheet 12: author_conflicts_review (if available)
+        conflicts_review_csv = os.path.join(all_dir, 'All_AuthorConflictsReview.csv')
+        if os.path.exists(conflicts_review_csv):
+            try:
+                conflicts_rev = pd.read_csv(conflicts_review_csv)
+                for c in conflicts_rev.columns:
+                    conflicts_rev[c] = remove_illegal_chars_series(conflicts_rev[c])
+                conflicts_rev.to_excel(writer, sheet_name='author_conflicts_review', index=False)
+            except Exception:
+                pass
+
         # Sheet 7: figure_1_data — yearly totals for main articles (ismainarticle == TRUE)
         try:
             # Robust boolean filter for ismainarticle
