@@ -31,14 +31,11 @@ def _norm_orcid(value: str) -> str:
 def _norm_openalex_author(value: str) -> str:
     if not isinstance(value, str):
         return ''
-    s = value.strip()
-    s = s.replace('OA:', '').replace('oa:', '')
-    s = s.replace('HTTPS://OPENALEX.ORG/', 'A').replace('https://openalex.org/', 'A')
-    s = s.upper()
-    # Accept IDs like A123456789 or full URL already normalized to string starting with A
-    if s.startswith('A'):
-        return s
-    return ''
+    s = value.strip().upper()
+    s = s.replace('OA:', '')
+    # Extract canonical pattern A<digits> from any representation
+    m = re.search(r"A\d+", s)
+    return m.group(0) if m else ''
 
 
 def _best_row(rows: List[pd.Series]) -> pd.Series:
@@ -95,10 +92,17 @@ def cross_consolidate_all_authors(all_dir: str) -> Tuple[pd.DataFrame, pd.DataFr
         if v:
             groups.setdefault(f'ORCID:{v}', []).append(i)
 
-    # 2) OA groups (without orcid) -> OA:A...
+    # Map OA -> ORCID PID when any row shares the same OA and has ORCID
+    oa_to_orcid_pid: Dict[str, str] = {}
+    for i, row in au.iterrows():
+        if row.get('__oa_norm') and row.get('__orcid_norm'):
+            oa_to_orcid_pid[row['__oa_norm']] = f"ORCID:{row['__orcid_norm']}"
+
+    # 2) OA groups (without orcid): link to ORCID group if shared OpenAlexID; else OA:A...
     for i, v in au['__oa_norm'].items():
         if v and not au.at[i, '__orcid_norm']:
-            groups.setdefault(f'OA:{v}', []).append(i)
+            pid = oa_to_orcid_pid.get(v, f'OA:{v}')
+            groups.setdefault(pid, []).append(i)
 
     # 3) NAME-only groups (without orcid and oa)
     # Try to map to existing groups via unique name_key; otherwise keep as-is
@@ -115,6 +119,7 @@ def cross_consolidate_all_authors(all_dir: str) -> Tuple[pd.DataFrame, pd.DataFr
             continue
         name_to_pid.setdefault(key, set()).add(pid)
 
+    conflicts: List[Dict[str, str]] = []
     for i in range(len(au)):
         if au.at[i, '__orcid_norm'] or au.at[i, '__oa_norm']:
             continue
@@ -128,10 +133,18 @@ def cross_consolidate_all_authors(all_dir: str) -> Tuple[pd.DataFrame, pd.DataFr
             orig = au.at[i, '__orig_pid']
             pid = orig if isinstance(orig, str) and orig.startswith('NAME:') else f"NAME:{key}" if key else orig
             groups.setdefault(pid, []).append(i)
+            # If multiple candidates existed, log conflict for review
+            if key and key in name_to_pid and len(name_to_pid[key]) > 1:
+                conflicts.append({
+                    'OriginalPersonID': str(au.at[i, '__orig_pid']),
+                    'NameKey': key,
+                    'CandidatePIDs': '; '.join(sorted(name_to_pid[key])),
+                })
 
     # Build consolidated authors
     out_rows = []
     pid_map: Dict[str, str] = {}  # orig_pid -> global_pid
+    alias_rows: List[Dict[str, str]] = []
     for pid, idxs in groups.items():
         rows = [au.loc[j] for j in idxs]
         best = _best_row(rows)
@@ -179,6 +192,13 @@ def cross_consolidate_all_authors(all_dir: str) -> Tuple[pd.DataFrame, pd.DataFr
         for j in idxs:
             orig = au.at[j, '__orig_pid']
             pid_map[str(orig)] = global_pid
+            alias_rows.append({
+                'OriginalPersonID': str(orig),
+                'GlobalPersonID': global_pid,
+                'AuthorFullName': fullname,
+                'Orcid': orcid_url,
+                'OpenAlexAuthorIDs': '; '.join(oa_urls) if oa_urls else ''
+            })
 
     authors_out = pd.DataFrame(out_rows)
     # Sort by PersonID for stability
@@ -200,9 +220,15 @@ def cross_consolidate_all_authors(all_dir: str) -> Tuple[pd.DataFrame, pd.DataFr
         if subset:
             aa_out = aa_out.drop_duplicates(subset=subset)
 
-    # Write back
+    # Write back (and emit alias/conflicts for traceability)
     authors_out.to_csv(authors_csv, index=False)
     aa_out.to_csv(aa_csv, index=False)
+    try:
+        if alias_rows:
+            pd.DataFrame(alias_rows).to_csv(os.path.join(all_dir, 'All_AuthorAlias.csv'), index=False)
+        if conflicts:
+            pd.DataFrame(conflicts).to_csv(os.path.join(all_dir, 'All_AuthorConflicts.csv'), index=False)
+    except Exception:
+        pass
 
     return authors_out, aa_out
-
