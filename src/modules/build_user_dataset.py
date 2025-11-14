@@ -45,7 +45,8 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
     if not os.path.exists(articles_csv):
         raise FileNotFoundError(f"All_Articles.csv not found in {all_dir}")
 
-    df = pd.read_csv(articles_csv)
+    # Load all consolidated articles once
+    articles_all = pd.read_csv(articles_csv)
 
     # Optionally enrich with Scimago quartile (by year)
     if add_quartile:
@@ -66,10 +67,10 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
                         return dataf[c]
                 return pd.Series([''] * len(dataf))
 
-            df['__issn_norm'] = norm_from_cols(df, ['issn', 'ISSN'], _normalize_issn)
-            df['__eissn_norm'] = norm_from_cols(df, ['eissn', 'EISSN'], _normalize_issn)
-            df['__title_key'] = title_from_cols(df, ['source_title', 'journal', 'source', 'Journal']).apply(_ascii_upper)
-            df['__year'] = pd.to_numeric(df.get('year', pd.Series([None]*len(df))), errors='coerce').astype('Int64')
+            articles_all['__issn_norm'] = norm_from_cols(articles_all, ['issn', 'ISSN'], _normalize_issn)
+            articles_all['__eissn_norm'] = norm_from_cols(articles_all, ['eissn', 'EISSN'], _normalize_issn)
+            articles_all['__title_key'] = title_from_cols(articles_all, ['source_title', 'journal', 'source', 'Journal']).apply(_ascii_upper)
+            articles_all['__year'] = pd.to_numeric(articles_all.get('year', pd.Series([None]*len(articles_all))), errors='coerce').astype('Int64')
 
             # Normalize keys in Scimago
             sci['__issn_norm'] = norm_from_cols(sci, ['Issn', 'ISSN', 'issn'], _normalize_issn)
@@ -86,26 +87,26 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
                 sci_q = sci_q.rename(columns={quart_col: 'Quartile'})
 
                 # Merge by ISSN+year
-                merged = df.merge(
+                merged = articles_all.merge(
                     sci_q[['__issn_norm', '__year', 'Quartile']].drop_duplicates(),
                     how='left', on=['__issn_norm', '__year'], suffixes=('', '_q1')
                 )
                 # Fill by eISSN+year where missing
-                aux = df.merge(
+                aux = articles_all.merge(
                     sci_q[['__eissn_norm', '__year', 'Quartile']].drop_duplicates(),
                     how='left', left_on=['__eissn_norm', '__year'], right_on=['__eissn_norm', '__year']
                 )
                 merged['Quartile'] = merged['Quartile'].fillna(aux['Quartile'])
 
                 # Fill by title+year where still missing
-                aux2 = df.merge(
+                aux2 = articles_all.merge(
                     sci_q[['__title_key', '__year', 'Quartile']].drop_duplicates(),
                     how='left', on=['__title_key', '__year']
                 )
                 merged['Quartile'] = merged['Quartile'].fillna(aux2['Quartile'])
 
                 # If we created a separate merged frame, sync back to df
-                df = merged
+                articles_all = merged
 
                 # Position Quartile next to 'journal' if present
                 if 'Quartile' in df.columns:
@@ -121,22 +122,22 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
                     df = df[cols_unique]
 
                     try:
-                        if 'journal' in df.columns:
-                            cols = list(df.columns)
+                        if 'journal' in articles_all.columns:
+                            cols = list(articles_all.columns)
                             qpos = cols.index('Quartile')
                             jpos = cols.index('journal')
                             if qpos != jpos + 1:
                                 cols.pop(qpos)
                                 cols.insert(jpos + 1, 'Quartile')
-                                df = df[cols]
-                        elif 'source_title' in df.columns:
-                            cols = list(df.columns)
+                                articles_all = articles_all[cols]
+                        elif 'source_title' in articles_all.columns:
+                            cols = list(articles_all.columns)
                             qpos = cols.index('Quartile')
                             spos = cols.index('source_title')
                             if qpos != spos + 1:
                                 cols.pop(qpos)
                                 cols.insert(spos + 1, 'Quartile')
-                                df = df[cols]
+                                articles_all = articles_all[cols]
                     except Exception:
                         # If any positioning fails, keep as-is
                         pass
@@ -147,7 +148,17 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
 
     # Write Excel with sheet 'wos_scopus' and (if available) raw WoS sheet 'wos'
     with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
-        df.to_excel(writer, sheet_name="wos_scopus", index=False)
+        # Build main-only view for the user and drop ismainarticle/help columns
+        if 'ismainarticle' in articles_all.columns:
+            col = articles_all['ismainarticle']
+            is_main = col if pd.api.types.is_bool_dtype(col) else (col.astype(str).str.upper().eq('TRUE') | col.astype(str).eq('1'))
+        else:
+            is_main = pd.Series([False] * len(articles_all))
+
+        helper_cols = ['__issn_norm', '__eissn_norm', '__title_key', '__year']
+        sheet_cols_drop = [c for c in helper_cols + ['ismainarticle'] if c in articles_all.columns]
+        sheet_main = articles_all[is_main].drop(columns=sheet_cols_drop, errors='ignore')
+        sheet_main.to_excel(writer, sheet_name="wos_scopus", index=False)
 
         # Try to locate WoS_results raw first-load CSV to provide a 1:1 count reference
         # Typical layout: <base>/WoS_results/1_temp_wos_df.csv and <base>/all_data_wos_scopus/
@@ -190,7 +201,7 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
 
                 # Join reference metadata by matching SR_ref -> Articles.SR
                 # Use the already loaded (possibly enriched) articles df
-                articles_meta = df.copy()
+                articles_meta = articles_all.copy()
                 joined = edges.merge(articles_meta, how='left', left_on='SR_ref', right_on='SR')
 
                 # Drop duplicate SR column from the right side; keep left SR and SR_ref
@@ -231,7 +242,7 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
                 citations = pd.read_csv(citation_csv)
                 edges = citations[['SR', 'SR_ref']].copy()
 
-                articles_meta = df.copy()
+                articles_meta = articles_all.copy()
                 # Identify journal column in articles
                 art_journal_col = 'journal' if 'journal' in articles_meta.columns else (
                     'source_title' if 'source_title' in articles_meta.columns else None
@@ -312,15 +323,15 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
 
         # Sheet 8: figure_2_country — country co-occurrence network for main articles
         try:
-            if 'SR' in df.columns:
+            if 'SR' in articles_all.columns:
                 # Filter main articles again
-                if 'ismainarticle' in df.columns:
-                    col = df['ismainarticle']
+                if 'ismainarticle' in articles_all.columns:
+                    col = articles_all['ismainarticle']
                     is_main = col if pd.api.types.is_bool_dtype(col) else (col.astype(str).str.upper().eq('TRUE') | col.astype(str).eq('1'))
                 else:
                     is_main = pd.Series([False] * len(df))
 
-                df_main = df[is_main].copy()
+                df_main = articles_all[is_main].copy()
                 # Country column (support alternative casing)
                 country_col = 'country' if 'country' in df_main.columns else ('Country' if 'Country' in df_main.columns else None)
                 if country_col is not None:
@@ -361,8 +372,8 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
                     raise ValueError("All_ArticleAuthor.csv lacks PersonID/AuthorID")
 
                 # Map SR -> ismainarticle from the articles DF already loaded
-                if 'ismainarticle' in df.columns and 'SR' in df.columns:
-                    art_flag = df[['SR', 'ismainarticle']].copy()
+                if 'ismainarticle' in articles_all.columns and 'SR' in articles_all.columns:
+                    art_flag = articles_all[['SR', 'ismainarticle']].copy()
                     # Normalize flag to boolean
                     col = art_flag['ismainarticle']
                     if pd.api.types.is_bool_dtype(col):
