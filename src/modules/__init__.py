@@ -57,6 +57,7 @@ from .add_year_and_scimago_info import add_year_and_scimago_info  # Adds year an
 from .to_xlsx import export_csvs_as_excel  # Combines CSV files into an Excel file
 from .build_user_dataset import build_user_dataset_from_all  # Build UserDataset.xlsx from All_*.csv (phase 1)
 from .cross_consolidate_all_authors import cross_consolidate_all_authors  # Cross-source author identity consolidation
+from .build_coauthor_edges import build_coauthor_edges_links  # Build simple coauthor edges (from,to,year,SR,openalex_work_id)
 
 # ==========================
 #  Tree of Science
@@ -119,6 +120,7 @@ __all__ = [
     "export_csvs_as_excel",
     "build_user_dataset_from_all",
     "cross_consolidate_all_authors",
+    "build_coauthor_edges_links",
     
     # ==========================
     #  Tree of Science
