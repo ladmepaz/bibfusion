@@ -260,6 +260,66 @@ def cross_consolidate_all_authors(all_dir: str, aggressive_name_merge: bool = Fa
             groups.setdefault(best_pid, []).extend(idxs)
             del groups[npid]
 
+        # Additionally: merge OA-only PIDs into matching ORCID PIDs by name signature + overlap
+        # Build representative maps if not present
+        # (reuse helpers above)
+        # Collect OA-only candidates
+        oa_only_pids = [pid for pid in list(groups.keys())
+                        if isinstance(pid, str) and pid.startswith('OA:')
+                        and all(not au.loc[i].get('__orcid_norm') for i in groups.get(pid, []))]
+        # Helper lambdas (reuse from NAME section)
+        def articles_of_pid(pid: str) -> set:
+            s = set()
+            for i in groups.get(pid, []):
+                orig = str(au.loc[i, '__orig_pid'])
+                if 'PersonID' in aa.columns:
+                    s.update(aa.loc[aa['PersonID'].astype(str)==orig, 'SR'].astype(str).tolist())
+            return s
+        def coauthors_of_pid(pid: str) -> set:
+            arts = articles_of_pid(pid)
+            if not arts:
+                return set()
+            subset = aa[aa['SR'].astype(str).isin(arts)]
+            return set(subset['PersonID'].astype(str).tolist()) if 'PersonID' in subset.columns else set()
+        def jaccard(a: set, b: set) -> float:
+            if not a and not b:
+                return 0.0
+            inter = len(a & b)
+            union = len(a | b)
+            return inter/union if union else 0.0
+
+        # Build rep key/sig for current groups
+        pid_rep_name_key = {}
+        pid_rep_name_sig = {}
+        for pid, idxs in groups.items():
+            best = _best_row([au.loc[j] for j in idxs])
+            rep = best.get('AuthorFullName', '') or best.get('AuthorName', '')
+            pid_rep_name_key[pid] = _ascii_upper(rep)
+            pid_rep_name_sig[pid] = _name_signature(rep)
+
+        for opid in oa_only_pids:
+            sig = pid_rep_name_sig.get(opid, '')
+            if not sig:
+                continue
+            # ORCID candidates with same signature
+            cand_orcid = [pid for pid in groups.keys() if pid.startswith('ORCID:') and pid_rep_name_sig.get(pid, '') == sig]
+            if not cand_orcid:
+                continue
+            # Score by overlaps
+            o_articles = articles_of_pid(opid)
+            o_coauth = coauthors_of_pid(opid)
+            best_score, best_pid = -1.0, None
+            for cpid in cand_orcid:
+                c_articles = articles_of_pid(cpid)
+                c_coauth = coauthors_of_pid(cpid)
+                sc = 50*jaccard(o_articles, c_articles) + 50*jaccard(o_coauth, c_coauth)
+                if sc > best_score:
+                    best_score, best_pid = sc, cpid
+            # Threshold to avoid accidental merges (require some overlap)
+            if best_pid is not None and best_score >= 10:  # requires decent shared signal
+                groups.setdefault(best_pid, []).extend(groups.get(opid, []))
+                del groups[opid]
+
     # Build consolidated authors
     out_rows = []
     pid_map: Dict[str, str] = {}  # orig_pid -> global_pid
