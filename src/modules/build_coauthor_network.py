@@ -25,6 +25,7 @@ def build_coauthor_network_for_gephi(
     aggregate: bool = True,
     main_only: bool = False,
     min_weight: int = 1,
+    gephi_format: bool = True,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Build a co-author network from consolidated outputs and export CSVs consumable by Gephi.
@@ -112,12 +113,14 @@ def build_coauthor_network_for_gephi(
         present_cols = [c for c in GEPIH_NODE_COLS if c in nodes_df.columns]
         nodes_df = nodes_df[present_cols]
         nodes_df = nodes_df[nodes_df[id_col].isin(node_ids)].drop_duplicates(subset=[id_col])
-        # Gephi expects an id column named 'Id' or uses first column; keep PersonID as key
-        # Ensure PersonID exists; if using AuthorID, rename accordingly for clarity
-        if id_col != 'PersonID' and 'PersonID' in nodes_df.columns:
-            # Reorder to keep id_col first
-            cols = [id_col] + [c for c in nodes_df.columns if c != id_col]
-            nodes_df = nodes_df[cols]
+        # Prepare Gephi-friendly columns: Id, Label
+        if gephi_format:
+            nodes_df = nodes_df.copy()
+            nodes_df.insert(0, 'Id', nodes_df[id_col])
+            label_col = 'AuthorFullName' if 'AuthorFullName' in nodes_df.columns else (
+                'AuthorName' if 'AuthorName' in nodes_df.columns else id_col
+            )
+            nodes_df.insert(1, 'Label', nodes_df[label_col])
     else:
         nodes_df = pd.DataFrame(columns=GEPIH_NODE_COLS)
 
@@ -126,8 +129,14 @@ def build_coauthor_network_for_gephi(
         edge_out = os.path.join(all_dir, 'CoauthorEdges.csv')
     if node_out is None:
         node_out = os.path.join(all_dir, 'CoauthorNodes.csv')
-    edges_out_df.to_csv(edge_out, index=False)
+    # Gephi prefers Source/Target/Weight/Type column names
+    if gephi_format and not edges_out_df.empty:
+        edges_write = edges_out_df.rename(columns={
+            'source': 'Source', 'target': 'Target', 'weight': 'Weight', 'type': 'Type'
+        })
+    else:
+        edges_write = edges_out_df
+    edges_write.to_csv(edge_out, index=False)
     nodes_df.to_csv(node_out, index=False)
 
     return edges_out_df, nodes_df
-
