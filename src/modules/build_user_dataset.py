@@ -338,6 +338,61 @@ def build_user_dataset_from_all(all_dir: str, out_path: str = None, add_quartile
             except Exception:
                 pass
 
+        # Sheet 13: author_anomalies — quick sanity checks on consolidated authors
+        try:
+            if os.path.exists(authors_csv):
+                au = pd.read_csv(authors_csv)
+                # Normalize helper accessors
+                def _is_orcid_pid(s):
+                    return isinstance(s, str) and s.upper().startswith('ORCID:')
+                def _is_oa_pid(s):
+                    return isinstance(s, str) and s.upper().startswith('OA:')
+                def _is_name_pid(s):
+                    return isinstance(s, str) and s.upper().startswith('NAME:')
+
+                rows = []
+                for _, r in au.iterrows():
+                    pid = r.get('PersonID', '')
+                    orcid = str(r.get('Orcid', '') or '').strip()
+                    oaid = str(r.get('OpenAlexAuthorID', '') or '').strip()
+                    # Multi OpenAlex for one ORCID
+                    if _is_orcid_pid(pid) and oaid:
+                        parts = [p.strip() for p in oaid.split(';') if p.strip()]
+                        if len(parts) > 1:
+                            rows.append({
+                                'PersonID': pid,
+                                'Orcid': orcid,
+                                'OpenAlexAuthorID': oaid,
+                                'AnomalyType': 'MultiOpenAlexForORCID',
+                                'Details': f'{len(parts)} OpenAlex IDs linked to one ORCID'
+                            })
+                    # OA-only identities (no ORCID)
+                    if _is_oa_pid(pid) and not orcid:
+                        rows.append({
+                            'PersonID': pid,
+                            'Orcid': orcid,
+                            'OpenAlexAuthorID': oaid,
+                            'AnomalyType': 'OAWithoutORCID',
+                            'Details': 'OpenAlex-only identity without ORCID'
+                        })
+                    # NAME-only identities (could merit review)
+                    if _is_name_pid(pid) and not orcid and not oaid:
+                        rows.append({
+                            'PersonID': pid,
+                            'Orcid': orcid,
+                            'OpenAlexAuthorID': oaid,
+                            'AnomalyType': 'NameOnlyIdentity',
+                            'Details': 'No ORCID/OpenAlex — consider manual review'
+                        })
+
+                if rows:
+                    anom = pd.DataFrame(rows)
+                    for c in anom.columns:
+                        anom[c] = remove_illegal_chars_series(anom[c])
+                    anom.to_excel(writer, sheet_name='author_anomalies', index=False)
+        except Exception:
+            pass
+
         # Sheet 7: figure_1_data — yearly totals for main articles (ismainarticle == TRUE)
         try:
             # Robust boolean filter for ismainarticle
