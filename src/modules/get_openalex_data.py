@@ -162,11 +162,12 @@ def extract_work_info(w: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
-def openalex_enrich_ref(df: pd.DataFrame) -> pd.DataFrame:
+def openalex_enrich_ref(df: pd.DataFrame, exclude_books: bool = True, audit_dropped_path: Optional[str] = None) -> pd.DataFrame:
     if 'referencias_citadas' not in df.columns:
         raise ValueError("Falta la columna 'referencias_citadas'. Ejecuta generate_references_column primero.")
     
     rows = []
+    dropped = []
     for _, row in df.iterrows():
         sr = row.get('SR')
         doi0 = row.get('doi')
@@ -208,6 +209,24 @@ def openalex_enrich_ref(df: pd.DataFrame) -> pd.DataFrame:
                     'author_keywords': None
                 })
                 continue
+
+            # Optionally exclude book-like types to avoid adding compiled volumes
+            if exclude_books:
+                wtype = (wd.get('type') or '').lower()
+                # Known book-ish types in OpenAlex
+                bookish = {
+                    'book', 'edited-book', 'monograph', 'reference-book', 'book-section', 'reference-entry'
+                }
+                if wtype in bookish:
+                    dropped.append({
+                        'SR_original': sr,
+                        'doi_original': doi0,
+                        'openalex_id': wid,
+                        'openalex_url': url,
+                        'type': wtype,
+                        'title': wd.get('title')
+                    })
+                    continue
                 
             info = extract_work_info(wd)
             info.update({
@@ -220,6 +239,12 @@ def openalex_enrich_ref(df: pd.DataFrame) -> pd.DataFrame:
             time.sleep(0.3)
     
     enriched = pd.DataFrame(rows)
+    # Optionally write audit of dropped items
+    if audit_dropped_path and dropped:
+        try:
+            pd.DataFrame(dropped).to_csv(audit_dropped_path, index=False)
+        except Exception:
+            pass
     cols = [
         'SR_original', 'doi_original', 'openalex_id', 'openalex_url', 
         'authors', 'authors_with_affiliations', 'orcids',
