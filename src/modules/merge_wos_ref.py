@@ -1,4 +1,3 @@
-import logging
 import pandas as pd
 def merge_wos_ref(wos_df: pd.DataFrame, wos_ref_enriched: pd.DataFrame) -> pd.DataFrame:
     """
@@ -23,47 +22,36 @@ def merge_wos_ref(wos_df: pd.DataFrame, wos_ref_enriched: pd.DataFrame) -> pd.Da
         The combined dataframe with 'ismainarticle' column and all modifications applied.
     """
     
-
-    # Configure logging if not already configured
-    logging.basicConfig(
-        filename='merge_wos_ref.log',  # Log to a file
-        filemode='a',                  # Append mode
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        level=logging.INFO
-    )
-
-    logging.info("Starting merge_wos_ref function.")
-
+    # Convertir todos los valores tipo string en mayúsculas sin afectar NaN u otros tipos
+    wos_ref_enriched = wos_ref_enriched.applymap(lambda x: x.upper() if isinstance(x, str) else x)
+    
     # Step 1: Add 'ismainarticle' Columns to Both DataFrames
     wos_df['ismainarticle'] = 'TRUE'
     wos_ref_enriched['ismainarticle'] = 'FALSE'
-    logging.info("Added 'ismainarticle' column to both wos_df and wos_ref_enriched.")
 
     # Step 2: Modify wos_ref_enriched
     # Step 2a: Remove existing 'SR' Column (if present)
     if 'SR' in wos_ref_enriched.columns:
         wos_ref_enriched = wos_ref_enriched.drop(columns=['SR'])
-        logging.info("Removed existing 'SR' column from wos_ref_enriched.")
     else:
-        logging.info("No existing 'SR' column to remove from wos_ref_enriched.")
+        None  # 'SR' column not present; no action needed.
 
     # Step 2b: Rename 'SR_ref' to 'SR'
     if 'SR_ref' in wos_ref_enriched.columns:
         wos_ref_enriched = wos_ref_enriched.rename(columns={'SR_ref': 'SR'})
-        logging.info("Renamed 'SR_ref' column to 'SR' in wos_ref_enriched.")
     else:
-        logging.warning("'SR_ref' column not found in wos_ref_enriched; cannot rename to 'SR'.")
+        None  # 'SR_ref' column not found; cannot rename to 'SR'.
 
     # Step 2c: Remove 'CR_ref' Column
     if 'CR_ref' in wos_ref_enriched.columns:
         wos_ref_enriched = wos_ref_enriched.drop(columns=['CR_ref'])
-        logging.info("Removed 'CR_ref' column from wos_ref_enriched.")
+        None  # 'CR_ref' column removed from wos_ref_enriched.
     else:
-        logging.warning("'CR_ref' column not found in wos_ref_enriched; cannot remove.")
+        None  # 'CR_ref' column not found; cannot remove.
 
     # Step 2d: Remove Duplicates Based on 'SR' with Specific Logic for 'DI'
     if 'SR' in wos_ref_enriched.columns:
-        logging.info("Handling duplicates in wos_ref_enriched based on 'SR' column.")
+        None  # Handling duplicates in wos_ref_enriched based on 'SR' column.
 
         def prioritize_entries(group):
             # Entries with valid 'DI' (not null, not '-', not empty)
@@ -78,10 +66,10 @@ def merge_wos_ref(wos_df: pd.DataFrame, wos_ref_enriched: pd.DataFrame) -> pd.Da
 
         # Apply the function to each group of duplicates
         wos_ref_cleaned = wos_ref_enriched.groupby('SR', as_index=False).apply(prioritize_entries).reset_index(drop=True)
-        logging.info("Removed duplicates in wos_ref_enriched based on 'SR' with priority given to entries with valid 'DI'.")
+        
     else:
         wos_ref_cleaned = wos_ref_enriched.copy()
-        logging.warning("'SR' column not found in wos_ref_enriched; cannot remove duplicates based on 'SR'.")
+        
 
     # Step 3: Align Columns for Concatenation
     # Get list of all columns in both dataframes
@@ -101,15 +89,15 @@ def merge_wos_ref(wos_df: pd.DataFrame, wos_ref_enriched: pd.DataFrame) -> pd.Da
     # Ensure both dataframes have the same column order
     wos_ref_cleaned = wos_ref_cleaned[wos_df.columns]
 
-    logging.info("Aligned columns between wos_df and wos_ref_cleaned for concatenation.")
+    # Aligned columns between wos_df and wos_ref_cleaned for concatenation.
 
     # Step 4: Concatenate DataFrames
     combined_df = pd.concat([wos_df, wos_ref_cleaned], ignore_index=True)
-    logging.info("Concatenated wos_df and wos_ref_cleaned into combined_df.")
+    # "Concatenated wos_df and wos_ref_cleaned into combined_df.")
 
     # Step 5: Remove Duplicates in 'SR' Column, Keeping 'ismainarticle' == 'TRUE'
     if 'SR' in combined_df.columns:
-        logging.info("Removing duplicates in combined_df based on 'SR', keeping entries where 'ismainarticle' == 'TRUE'.")
+        # Removing duplicates in combined_df based on 'SR', keeping entries where 'ismainarticle' == 'TRUE'.
 
         # Sort the dataframe so that rows with 'ismainarticle' == 'TRUE' come first
         combined_df['ismainarticle_order'] = combined_df['ismainarticle'] == 'TRUE'
@@ -121,9 +109,8 @@ def merge_wos_ref(wos_df: pd.DataFrame, wos_ref_enriched: pd.DataFrame) -> pd.Da
         # Drop the temporary 'ismainarticle_order' column
         combined_df = combined_df.drop(columns=['ismainarticle_order'])
 
-        logging.info("Removed duplicates in combined_df based on 'SR'.")
+        # Removed duplicates in combined_df based on 'SR'.
     else:
-        logging.warning("'SR' column not found in combined_df; cannot remove duplicates based on 'SR'.")
-
-    logging.info("merge_wos_ref function completed successfully.")
+        # "'SR' column not found in combined_df; cannot remove duplicates based on 'SR'."
+        None
     return combined_df

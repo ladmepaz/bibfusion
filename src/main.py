@@ -434,6 +434,68 @@ def preprocesing_df(path_wos=None,path_scopus=None):
               """) 
  
     if path_wos and path_scopus:
+
+        ##############################################
+        #        Get ToS (root, trunk, branchs)
+        ##############################################
+        
+        if isinstance(path_wos, str):
+            path_wos = [path_wos]
+        if isinstance(path_scopus, str):
+            path_scopus = [path_scopus]
+        else:
+            raise ValueError("path_wos and path_scopus must be a string or a list of strings.")
+        
+        # Take the first file to obtain the base folder (they are all in the same folder)    
+        base_dir_wos = os.path.dirname(path_wos[0])
+        base_dir_scopus = os.path.dirname(path_scopus[0])
+        if base_dir_wos != base_dir_scopus:
+            raise ValueError("The WoS and Scopus files must be in the same root folder.")
+        elif base_dir_wos == base_dir_scopus:
+            base_dir = base_dir_wos
+        else:
+            raise ValueError("Error determining the root folder.")
+
+        # Load citation DataFrames
+        wos_citacion = pd.read_csv(os.path.join(base_dir, "WoS_results/Citation.csv"))
+        scopus_citation = pd.read_csv(os.path.join(base_dir, "Scopus_results/Citation.csv"))
+        citation = pd.concat([wos_citacion, scopus_citation], ignore_index=True)
+
+        # Get the citation network (root, trunk, branches)
+        citation_network = get_citation_network(citation)
+        print("1. network de Scopus obtenida")
+
+        # Clean the citation network
+        citation_network = clean_citation_network(citation_network)
+        print("2. network de Scopus limpiada")
+
+        # Add community branches
+        citation_network = add_community_branch(citation_network)
+        print("3. branches de la network de Scopus añadidas")
+
+        # Get ToS (root, trunk, branches)
+        tos = get_tos(citation_network)
+        print("4. ToS de la network de WoS obtenida")
+
+        article_wos = pd.read_csv(os.path.join(base_dir, "WoS_results/Article.csv"))
+        article_scopus = pd.read_csv(os.path.join(base_dir, "Scopus_results/Article.csv"))
+        article = pd.concat([article_wos, article_scopus], ignore_index=True)
+
+        # Convert ToS to DataFrame
+        df_nodos, df_aristas, df_tos_initial = graph_to_df(tos,article)
+        df_nodos.to_csv(os.path.join(base_dir, "tos_df_nodes.csv"), index=False)
+        df_aristas.to_csv(os.path.join(base_dir, "tos_df_edges.csv"), index=False)
+        print("5. ToS de la network de WoS convertida a DataFrame, nodos y aristas exportados.")
+
+
+        # Get ToS DataFrame
+        dataframe_tos_initial = merge_tos_with_articles(df_tos_initial, article)
+        print("18. Sacada la información de la network de WoS de 'Article'")
+
+        # Clean and sort ToS
+        tos_df = sort_by_tos_and_year(dataframe_tos_initial)
+        tos_df.to_csv(os.path.join(base_dir, "TreeOfScience.csv"), index=False)
+
         print("""
               =================================================
                Ambos archivos de WoS y Scopus han sido procesados.
