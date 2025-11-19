@@ -39,6 +39,7 @@ from .get_openalex_data import (
 from .citation_scopus import citation_scopus  # Extracts citations from Scopus
 from .scopus_get_article_entity import scopus_get_article_entity  # Gets article entity from Scopus
 from .fill_author_from_full_names import fill_author_from_full_names  # Fills author names from full names
+from .extract_orcids import extract_orcids  # Extracts ORCID IDs from Scopus data
 
 # ==========================
 #  Common or shared
