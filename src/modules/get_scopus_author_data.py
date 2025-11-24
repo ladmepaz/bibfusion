@@ -16,10 +16,15 @@ def get_scopus_author_data(df_original):
             # Procesamos los ORCIDs (extraemos solo los números después de .org/)
             orcids = []
             if pd.notna(row['orcid']):
-                # Extraemos solo la parte numérica del ORCID
-                orcid_matches = re.findall(r'https?://orcid\.org/(\d{4}-\d{4}-\d{4}-\d{3}[\dX])', 
-                                         row['orcid'].lower())
-                orcids = [match.upper() for match in orcid_matches]  # Convertimos a mayúsculas
+                orcid_parts = row['orcid'].split(';')
+                for part in orcid_parts:
+                    part = part.strip()
+                    match = re.search(r'https?://orcid\.org/(\d{4}-\d{4}-\d{4}-\d{3}[\dX])', 
+                                    part.lower())
+                    if match:
+                        orcids.append(match.group(1).upper())
+                    else:
+                        orcids.append("NO ORCID")  
             
             # Procesamos los nombres completos de los autores
             autores_full = []
@@ -62,6 +67,9 @@ def get_scopus_author_data(df_original):
             # Creamos la cadena combinada de autores con afiliaciones
             combined_authors_affiliations = "; ".join(authors_with_affiliations_list) if authors_with_affiliations_list else "NO AFFILIATIONS"
             
+            # Procesamos el autor correspondiente y email
+            emails_por_autor = {}
+        
             # Procesamos los IDs de investigador
             researcher_ids = {}
             if pd.notna(row['author_full_names']):
@@ -88,7 +96,6 @@ def get_scopus_author_data(df_original):
                     if author_name in key or key in author_name:
                         affiliation = afiliaciones[key]
                         break
-                
                 # Obtenemos el ResearcherID
                 researcher_id = ""
                 for key, value in researcher_ids.items():

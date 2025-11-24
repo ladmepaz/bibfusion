@@ -124,6 +124,13 @@ def unify_author_fullname_and_orcid(
     final_df = pd.concat(all_results, ignore_index=True)
     final_df['UnifiedOrcid'] = final_df['UnifiedOrcid'].fillna('NO ORCID')
     final_df['UnifiedName'] = final_df['UnifiedName'].str.rstrip('.')
+
+    # Delete duplicated ORCID assignments
+    author_orcid_map = final_df[['UnifiedName', 'UnifiedOrcid']].drop_duplicates()
+    orcid_counts = author_orcid_map.groupby('UnifiedOrcid')['UnifiedName'].nunique().reset_index()
+    duplicated_orcids = orcid_counts[orcid_counts['UnifiedName'] > 1]['UnifiedOrcid'].tolist()
+    final_df.loc[final_df['UnifiedOrcid'].isin(duplicated_orcids), 'UnifiedOrcid'] = 'NO ORCID'
+
     # Create the AuthorID column by concatenating AuthorName, AuthorFullName, and UnifiedOrcid
     final_df['AuthorID'] = (
         final_df['AuthorName'] + '_' +

@@ -566,4 +566,18 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
     authors_df = authors_df[['SR', 'AuthorOrder', 'AuthorName', 'AuthorFullName', 'Affiliation',
                              'CorrespondingAuthor', 'Orcid', 'ResearcherID', 'Email']]
 
+    # Step 19: Deduplicate ORCID assignments based only on most frequent AuthorFullName
+
+    orcid_counts = authors_df.groupby('Orcid')['AuthorFullName'].value_counts()
+    duplicated_orcids = [o for o in authors_df['Orcid'].unique()
+                        if o != 'NO ORCID' and (authors_df['Orcid'] == o).sum() > 1]
+
+    for orcid in duplicated_orcids:
+        # Filtrar autores con ese ORCID
+        mask = authors_df['Orcid'] == orcid
+        # Buscar el AuthorFullName más frecuente (probable dueño)
+        top_name = authors_df.loc[mask, 'AuthorFullName'].value_counts().idxmax()
+        # Asignar: Solo el top_name conserva el ORCID, los otros van a 'NO ORCID'
+        authors_df.loc[mask & (authors_df['AuthorFullName'] != top_name), 'Orcid'] = 'NO ORCID'
+
     return authors_df
