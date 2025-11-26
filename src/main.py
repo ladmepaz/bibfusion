@@ -227,39 +227,12 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         #        Get ToS (root, trunk, branchs)
         ##############################################
         
-        # Get the citation network (root, trunk, branches)
-        citation_network = get_citation_network(wos_citation)
-        print("13. network de Scopus obtenida")
+        ##############################################
+        #        Get ToS (root, trunk, branchs)
+        ##############################################
 
-        # Clean the citation network
-        citation_network = clean_citation_network(citation_network)
-        print("14. network de Scopus limpiada")
-
-        # Add community branches
-        citation_network = add_community_branch(citation_network)
-        print("15. branches de la network de Scopus añadidas")
-
-        # Get ToS (root, trunk, branches)
-        tos = get_tos(citation_network)
-        print("16. ToS de la network de WoS obtenida")
-
-        # Convert ToS to DataFrame
-        df_nodos, df_aristas, df_tos_initial = graph_to_df(tos)
-        df_nodos.to_csv(os.path.join(output_dir,'tos_df_nodes.csv'), index=False)
-        df_aristas.to_csv(os.path.join(output_dir,'tos_df_edges.csv'), index=False)
-        print("17. ToS de la network de WoS convertida a DataFrame, nodos y aristas exportados.")
-
-        # Get ToS DataFrame
-        dataframe_tos_initial = merge_tos_with_articles(df_tos_initial, article)
-        print("18. Sacada la información de la network de WoS de 'Article'")
-
-        # Clean and sort ToS
-        tos_df = sort_by_tos_and_year(dataframe_tos_initial)
-        tos_df.to_csv(os.path.join(output_dir,'TreeOfScience.csv'), index=False)
-
-        # Combine CSV to Excel
-        export_csvs_as_excel(output_dir)
-        print("19. Archivos CSV combinados a Excel")
+        # Tree of Science generation skipped for WoS (legacy)
+        print("13. Tree of Science (WoS) omitido; se generan solo CSVs")
 
     else:
         print("""
@@ -455,17 +428,12 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         #        Get ToS (root, trunk, branchs)
         ##############################################
         
-        # Get the citation network (root, trunk, branches)
-        citation_network = get_citation_network(scopus_citation)
-        print("19. network de Scopus obtenida")
+        ##############################################
+        #        Get ToS (root, trunk, branchs)
+        ##############################################
 
-        # Clean the citation network
-        citation_network = clean_citation_network(citation_network)
-        print("20. network de Scopus limpiada")
-
-        # Add community branches
-        citation_network = add_community_branch(citation_network)
-        print("21. branches de la network de Scopus añadidas")
+        # Tree of Science generation skipped for Scopus (legacy)
+        print("19. Tree of Science (Scopus) omitido; se generan solo CSVs")
 
         # Consolidated All_* outputs when both sources are available
         try:
@@ -473,30 +441,9 @@ def preprocesing_df(path_wos=None,path_scopus=None):
                 base_dir_w = os.path.dirname(path_wos[0]) if isinstance(path_wos, list) else os.path.dirname(path_wos)
                 all_dir = os.path.join(base_dir_w, 'all_data_wos_scopus')
                 merge_all_entities(wos_output_dir, scopus_output_dir, all_dir)
-                print("22. Generados All_* (WoS+Scopus) en 'all_data_wos_scopus'")
+                print("20. Generados All_* (WoS+Scopus) en 'all_data_wos_scopus'")
         except Exception as e:
             print(f"[WARN] Falló la unión WoS+Scopus: {e}")
-        # Get ToS (root, trunk, branches)
-        tos = get_tos(citation_network)
-        print("22. ToS de la network de Scopus obtenida")
-
-        # Convert ToS to DataFrame
-        df_nodos, df_aristas, df_tos_initial = graph_to_df(tos)
-        df_nodos.to_csv(os.path.join(output_dir,'tos_df_nodes.csv'), index=False)
-        df_aristas.to_csv(os.path.join(output_dir,'tos_df_edges.csv'), index=False)
-        print("23. ToS de la network de Scopus convertida a DataFrame, nodos y aristas exportados.")
-
-        # Get ToS DataFrame
-        dataframe_tos_initial = merge_tos_with_articles(df_tos_initial, article)
-        print("24. Sacada la información de la network de Scopus de 'Article'")
-
-        # Clean and sort ToS
-        tos_df = sort_by_tos_and_year(dataframe_tos_initial)
-        tos_df.to_csv(os.path.join(output_dir,'TreeOfScience.csv'), index=False)
-
-        # Combine CSV to Excel
-        export_csvs_as_excel(output_dir)
-        print("25. Archivos CSV combinados a Excel")
 
     else:
         print("""
