@@ -325,6 +325,21 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         # scopus_df_3 = pd.read_csv(os.path.join(output_dir,'7_temp_scopus_df_3.csv'))
         print("8.1. Nombres de autores rellenados desde nombres completos")
 
+        # Extraer país desde affiliations (similar a WoS)
+        def _extract_country_from_aff(aff_str: str) -> str:
+            if not isinstance(aff_str, str) or not aff_str.strip():
+                return ''
+            parts = [p.strip() for p in aff_str.split(';') if p.strip()]
+            countries = []
+            for p in parts:
+                segs = [s.strip() for s in p.split(',') if s.strip()]
+                if segs:
+                    countries.append(segs[-1].upper())
+            return '; '.join(countries)
+
+        if 'affiliations' in scopus_df_3.columns:
+            scopus_df_3['country'] = scopus_df_3['affiliations'].apply(_extract_country_from_aff)
+
         # Article Dataframe
         article = scopus_get_article_entity(scopus_df_3)
         article.to_csv(os.path.join(output_dir,'Article.csv'), index=False)
