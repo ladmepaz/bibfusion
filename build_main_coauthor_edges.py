@@ -3,32 +3,42 @@ from itertools import combinations
 from pathlib import Path
 
 
-def build_main_coauthor_edges(all_dir: str, out_edges: str = "MainArticles_Edges.csv") -> pd.DataFrame:
+def build_main_coauthor_edges(
+    all_dir: str,
+    out_edges: str = "AllArticles_Edges.csv",
+) -> pd.DataFrame:
     """
-    Build coauthor edges from MainArticles_Authors.csv (SR, AuthorFullName).
-    Outputs an edge list with columns: from, to, SR.
+    Build coauthor edges from all articles (main + references) using All_ArticleAuthor + All_Authors.
+    Outputs an edge list with columns: Source, Target, SR (Gephi-friendly).
     """
     all_dir = Path(all_dir)
-    main_authors_path = all_dir / "MainArticles_Authors.csv"
-    if not main_authors_path.exists():
-        raise FileNotFoundError(f"{main_authors_path} not found. Run build_top_authors first.")
+    aa_path = all_dir / "All_ArticleAuthor.csv"
+    au_path = all_dir / "All_Authors.csv"
+    if not aa_path.exists() or not au_path.exists():
+        raise FileNotFoundError("All_ArticleAuthor.csv or All_Authors.csv not found in " + str(all_dir))
 
-    df = pd.read_csv(main_authors_path)
-    if not {"SR", "AuthorFullName"}.issubset(df.columns):
-        raise ValueError("MainArticles_Authors.csv must contain SR and AuthorFullName columns")
+    aa = pd.read_csv(aa_path)
+    au = pd.read_csv(au_path)
 
-    df["SR"] = df["SR"].astype(str)
-    df["AuthorFullName"] = df["AuthorFullName"].astype(str)
+    # Determine join key
+    key = "PersonID" if ("PersonID" in aa.columns and "PersonID" in au.columns) else "AuthorID"
+    aa[key] = aa[key].astype(str)
+    au[key] = au[key].astype(str)
 
+    # Attach AuthorFullName
+    aa = aa.merge(au[[key, "AuthorFullName"]], on=key, how="left")
+
+    # Build edges per SR
     rows = []
-    for sr, grp in df.groupby("SR"):
-        authors = sorted(set(grp["AuthorFullName"].tolist()))
+    aa["SR"] = aa["SR"].astype(str)
+    for sr, grp in aa.groupby("SR"):
+        authors = sorted(set(grp["AuthorFullName"].dropna().astype(str).tolist()))
         if len(authors) < 2:
             continue
         for a, b in combinations(authors, 2):
-            rows.append({"from": a, "to": b, "SR": sr})
+            rows.append({"Source": a, "Target": b, "SR": sr})
 
-    edges = pd.DataFrame(rows, columns=["from", "to", "SR"])
+    edges = pd.DataFrame(rows, columns=["Source", "Target", "SR"])
     out_path = all_dir / out_edges
     edges.to_csv(out_path, index=False)
     print("Guardado:", out_path)
