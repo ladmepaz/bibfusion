@@ -127,6 +127,35 @@ def scopus_csv_to_df(file_path, scimago, score_cutoff=85):
 
         df["SR"] = df["SR"].apply(transform_sr)
 
+        # Rebuild SR using author_full_names (more robust) -> LAST FIRSTINITIAL, YEAR, SOURCE_TITLE
+        def build_sr(row):
+            auths = str(row.get('author_full_names') or '').split(';')
+            first = auths[0].strip() if auths else ''
+            # Remove any IDs in parentheses
+            import re
+            first_clean = re.sub(r'\\(.*?\\)', '', first).strip()
+            # try to parse "LAST, FIRST" or "FIRST LAST"
+            if ',' in first_clean:
+                last, first_names = [x.strip() for x in first_clean.split(',', 1)]
+                init = first_names[0].upper() if first_names else ''
+                base = f"{last.upper()} {init}" if init else last.upper()
+            else:
+                parts = [p.strip() for p in first_clean.split() if p.strip()]
+                if len(parts) >= 2:
+                    last = parts[-1].upper()
+                    init = parts[0][0].upper()
+                    base = f"{last} {init}"
+                elif parts:
+                    base = parts[0].upper()
+                else:
+                    base = ''
+            year = str(row.get('year') or '').strip()
+            source = str(row.get('source_title') or '').strip().upper()
+            sr_parts = [p for p in [base, year, source] if p]
+            return ', '.join(sr_parts)
+
+        df['SR'] = df.apply(build_sr, axis=1)
+
         # --- Reorder to exact schema ---
         desired_order = [
             'author',
