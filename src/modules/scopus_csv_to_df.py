@@ -29,7 +29,15 @@ def scopus_csv_to_df(file_path, scimago, score_cutoff=85):
 
         df.columns = transform_column_labels(df.columns)
 
-        # --- Uppercase key text fields ---
+        # --- Uppercase key text fields (ASCII) ---
+        import unicodedata
+        def ascii_upper(val):
+            if pd.isna(val):
+                return ''
+            s = str(val)
+            norm = unicodedata.normalize('NFKD', s)
+            return ''.join(ch for ch in norm if not unicodedata.combining(ch)).upper()
+
         cols_to_upper = [
             'authors', 'author_full_names', 'title', 'source_title', 'affiliations',
             'authors_with_affiliations', 'abstract', 'author_keywords', 'index_keywords',
@@ -41,7 +49,7 @@ def scopus_csv_to_df(file_path, scimago, score_cutoff=85):
 
         for c in cols_to_upper:
             if c in df.columns:
-                df[c] = df[c].astype(str).str.upper()
+                df[c] = df[c].apply(ascii_upper)
 
         # --- Pre-SR renames ---
         df.rename(columns={
