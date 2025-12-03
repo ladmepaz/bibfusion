@@ -104,6 +104,69 @@ def merge_articles(wos_article: pd.DataFrame, scopus_article: pd.DataFrame) -> T
     # Clean helper cols
     merged = merged.drop(columns=['__doi_norm', '__title_key', '__year', '__source'], errors='ignore')
 
+    # Normalize year (remove .0) and SR formatting
+    if 'year' in merged.columns:
+        def _clean_year(y):
+            try:
+                val = float(y)
+                if pd.isna(val):
+                    return y
+                return int(val)
+            except Exception:
+                return y
+        merged['year'] = merged['year'].apply(_clean_year)
+
+    def _clean_sr_row(row):
+        sr = str(row.get('SR', '') or '')
+        sr = re.sub(r",\\s*(\\d{4})\\.0\\b", r", \\1", sr)
+        sr = re.sub(r"\\s+", " ", sr).strip()
+        # If SR is missing/NaN-like, rebuild from author_full_names/year/source_title if possible
+        if not sr or sr.upper().startswith('NAN'):
+            first = ''
+            full = row.get('author_full_names', '')
+            if isinstance(full, str) and full.strip():
+                first_full = full.split(';')[0].strip()
+                first_full = _ascii_upper(first_full)
+                if ',' in first_full:
+                    first = first_full
+                else:
+                    parts = first_full.split()
+                    if len(parts) >= 2:
+                        last = parts[-1]
+                        init = parts[0][0] if parts[0] else ''
+                        first = f"{last}, {init}" if init else last
+                    elif parts:
+                        first = parts[0]
+            year = str(row.get('year', '') or '').strip()
+            m = re.match(r"(\\d{4})", year)
+            if m:
+                year = m.group(1)
+            src = _ascii_upper(str(row.get('source_title', '') or '').strip())
+            parts_sr = [p for p in [first, year, src] if p]
+            if parts_sr:
+                sr = ', '.join(parts_sr)
+        return sr
+
+    if 'SR' in merged.columns:
+        merged['SR'] = merged.apply(_clean_sr_row, axis=1)
+        # Remove lingering ".0" in numeric segments and tidy spaces
+        merged['SR'] = (
+            merged['SR']
+            .str.replace(r"(\d{4})\.0\b", r"\1", regex=True)
+            .str.replace(r"(\d+)\.0\b", r"\1", regex=True)
+            .str.replace(r"\.0,", ",", regex=True)
+            .str.replace(r"\s+", " ", regex=True)
+            .str.strip()
+        )
+        # Drop rows with SR starting with NAN (no author info)
+        merged = merged[~merged['SR'].str.startswith('NAN', na=False)]
+
+    # Ensure ismainarticle is boolean and no NaN
+    if 'ismainarticle' in merged.columns:
+        merged['ismainarticle'] = merged['ismainarticle'].fillna(False).astype(bool)
+    else:
+        merged['ismainarticle'] = False
+
     return merged, doi_to_primary_sr
 
 
@@ -183,10 +246,14 @@ def merge_citation(
     scopus_article: pd.DataFrame,
     doi_to_primary_sr: Dict[str, str]
 ) -> pd.DataFrame:
-    def remap_sr(df: pd.DataFrame, map_sr_doi: Dict[str, str]) -> pd.DataFrame:
+    def remap_sr_with_doi(df: pd.DataFrame, map_sr_doi: Dict[str, str], source: str) -> pd.DataFrame:
+        """
+        First remap SR using DOI -> primary SR map; keep source label for tie-breaking later.
+        """
         if df is None or df.empty:
             return df
         out = df.copy()
+        out['__source'] = source
         if 'SR' in out.columns:
             out['SR'] = out['SR'].astype(str)
             def map_sr(sr):
@@ -195,13 +262,129 @@ def merge_citation(
                     return doi_to_primary_sr[doi] or sr
                 return sr
             out['SR'] = out['SR'].map(map_sr)
+        if 'SR_ref' in out.columns:
+            out['SR_ref'] = out['SR_ref'].astype(str)
         return out
+
+    def clean_sr(sr: str) -> str:
+        """ASCII upper and normalize year formats (e.g., 2025.0 -> 2025)."""
+        if not isinstance(sr, str):
+            return ''
+        s = _ascii_upper(sr)
+        # replace ", 2025.0" -> ", 2025"
+        s = re.sub(r",\s*(\d{4})\.0\b", r", \1", s)
+        s = re.sub(r"\s+", " ", s).strip()
+        return s
+
+    def sr_key(sr: str):
+        """
+        Build a coarse key (LAST, YEAR) from an SR string.
+        Example: 'GUDAS S, 2025, MATHEMATICS' -> ('GUDAS','2025')
+        """
+        s = clean_sr(sr)
+        if not s:
+            return None
+        parts = [p.strip() for p in s.split(',') if p.strip()]
+        if len(parts) < 2:
+            return None
+        auth = parts[0]
+        year_part = parts[1]
+        m = re.search(r"(\\d{4})", year_part)
+        if not m:
+            return None
+        year = m.group(1)
+        tokens = auth.split()
+        if not tokens:
+            return None
+        last = tokens[0]
+        return (last, year)
+
+    def choose_canonical(sr_list, src_list):
+        """
+        Pick the best SR among variants sharing the same key.
+        Heuristics: prefer those with journal segment (more than 2 commas), then WoS over Scopus, then longer length.
+        """
+        best = None
+        best_score = (-1, -1, -1)  # journal_flag, source_weight, length
+        for sr, src in zip(sr_list, src_list):
+            norm = _ascii_upper(sr)
+            journal_flag = 1 if norm.count(',') >= 2 else 0
+            source_weight = 1 if src == 'wos' else 0  # prefer WoS if available
+            length = len(norm)
+            score = (journal_flag, source_weight, length)
+            if score > best_score:
+                best_score = score
+                best = sr
+        return best
 
     map_w = _sr_to_doi(wos_article)
     map_s = _sr_to_doi(scopus_article)
-    w = remap_sr(wos_citation, map_w)
-    s = remap_sr(scopus_citation, map_s)
+    w = remap_sr_with_doi(wos_citation, map_w, 'wos')
+    s = remap_sr_with_doi(scopus_citation, map_s, 'scopus')
     combined = pd.concat([x for x in [w, s] if x is not None], ignore_index=True, sort=False)
+
+    if combined.empty:
+        return combined
+
+    # Pre-clean SR / SR_ref
+    if 'SR' in combined.columns:
+        combined['SR'] = combined['SR'].apply(clean_sr)
+    if 'SR_ref' in combined.columns:
+        combined['SR_ref'] = combined['SR_ref'].apply(clean_sr)
+
+    # Build key -> canonical SR
+    canonical_map = {}
+    if 'SR' in combined.columns:
+        combined['__key'] = combined['SR'].apply(sr_key)
+        for key, grp in combined.dropna(subset=['__key']).groupby('__key'):
+            sr_list = grp['SR'].tolist()
+            src_list = grp['__source'].tolist() if '__source' in grp.columns else [''] * len(sr_list)
+            canonical_map[key] = choose_canonical(sr_list, src_list)
+
+        # Remap SR using canonical map
+        def map_canon(sr):
+            k = sr_key(sr)
+            if k and k in canonical_map:
+                return canonical_map[k]
+            return sr
+        combined['SR'] = combined['SR'].apply(map_canon)
+
+    # Remap SR_ref using same key map
+    if 'SR_ref' in combined.columns:
+        combined['__key_ref'] = combined['SR_ref'].apply(sr_key)
+        def map_ref(sr, k):
+            if k and k in canonical_map:
+                return canonical_map[k]
+            return sr
+        combined['SR_ref'] = [map_ref(sr, k) for sr, k in zip(combined['SR_ref'], combined.get('__key_ref', []))]
+
+        # Drop obvious noise in SR_ref (no author, just years or placeholders)
+        def valid_sr_ref(sr: str) -> bool:
+            if not isinstance(sr, str):
+                return False
+            if not sr.strip():
+                return False
+            if sr.strip().upper() in {'NAN', 'NONE'}:
+                return False
+            if not re.search(r"[A-Z]", sr):
+                return False
+            parts = [p.strip() for p in sr.split(',')]
+            if not parts:
+                return False
+            first = parts[0]
+            if not first or first.startswith('*') or first.startswith('.'):
+                return False
+            # reject pure year as first token
+            if re.fullmatch(r"\d{4}(\.0)?", first):
+                return False
+            # reject empty first token after a leading comma
+            if first == '':
+                return False
+            return True
+
+        combined = combined[combined['SR_ref'].apply(valid_sr_ref)]
+
+    combined = combined.drop(columns=['__key', '__key_ref', '__source'], errors='ignore')
     combined = combined.drop_duplicates()
     return combined
 
@@ -374,6 +557,25 @@ def merge_from_outputs(wos_dir: str, scopus_dir: str, out_dir: str) -> Tuple[pd.
     wos_article = pd.read_csv(f"{wos_dir}/Article.csv")
     scopus_article = pd.read_csv(f"{scopus_dir}/Article.csv")
     all_articles, doi_map = merge_articles(wos_article, scopus_article)
+    # Final SR/year cleanup
+    all_articles['SR'] = (
+        all_articles['SR']
+        .astype(str)
+        .str.replace(r"(\\d{4})\\.0\\b", r"\\1", regex=True)
+        .str.replace(r"(\\d+)\\.0\\b", r"\\1", regex=True)
+        .str.replace(r"\\s+", " ", regex=True)
+        .str.strip()
+    )
+    if 'year' in all_articles.columns:
+        def _clean_year_final(y):
+            try:
+                val = float(y)
+                if pd.isna(val):
+                    return y
+                return int(val)
+            except Exception:
+                return y
+        all_articles['year'] = all_articles['year'].apply(_clean_year_final)
     all_articles.to_csv(f"{out_dir}/All_Articles.csv", index=False)
 
     # Load Authors + ArticleAuthor

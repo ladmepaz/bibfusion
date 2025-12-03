@@ -1,5 +1,6 @@
 import pandas as pd
 import re
+import unicodedata
 from rapidfuzz import process, fuzz
 
 def scopus_csv_to_df(file_path, scimago, score_cutoff=85):
@@ -30,13 +31,30 @@ def scopus_csv_to_df(file_path, scimago, score_cutoff=85):
         df.columns = transform_column_labels(df.columns)
 
         # --- Uppercase key text fields (ASCII) ---
-        import unicodedata
+        MAPEO_ESPECIAL = str.maketrans({
+            "Ø": "O", "ø": "o",
+            "Æ": "AE", "æ": "ae",
+            "Å": "A", "å": "a",
+            "Ð": "D", "ð": "d",
+            "Þ": "Th", "þ": "th",
+            "ß": "ss",
+        })
+
         def ascii_upper(val):
+            """
+            Normalize to ASCII-only upper-case:
+            - NFD to break accents
+            - drop combining marks
+            - manual mapping for characters that do not decompose (e.g., Ø -> O)
+            - encode/decode ASCII ignoring leftovers
+            """
             if pd.isna(val):
                 return ''
             s = str(val)
-            norm = unicodedata.normalize('NFKD', s)
-            return ''.join(ch for ch in norm if not unicodedata.combining(ch)).upper()
+            norm = unicodedata.normalize('NFD', s)
+            no_marks = ''.join(ch for ch in norm if not unicodedata.combining(ch))
+            mapped = no_marks.translate(MAPEO_ESPECIAL)
+            return mapped.encode('ascii', 'ignore').decode('ascii').upper()
 
         cols_to_upper = [
             'authors', 'author_full_names', 'title', 'source_title', 'affiliations',
@@ -164,6 +182,62 @@ def scopus_csv_to_df(file_path, scimago, score_cutoff=85):
 
         df['SR'] = df.apply(build_sr, axis=1)
 
+        # --- Derive 'country' from 'affiliations' (similar a WoS) ---
+        def load_country_map():
+            country_map = {}
+            try:
+                repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+                country_csv = os.path.join(repo_root, 'tests', 'files', 'country.csv')
+                if os.path.exists(country_csv):
+                    cdf = pd.read_csv(country_csv, sep=';')
+                    for name in cdf.get('Name', pd.Series(dtype=str)).astype(str):
+                        up = ascii_upper(name)
+                        if up:
+                            country_map[up] = up
+            except Exception:
+                country_map = {}
+            return country_map
+
+        country_map = load_country_map()
+        synonyms = {
+            'USA': 'UNITED STATES', 'U S A': 'UNITED STATES', 'UNITED STATES OF AMERICA': 'UNITED STATES',
+            'U ARAB EMIR': 'UNITED ARAB EMIRATES', 'UNITED ARAB EMIR': 'UNITED ARAB EMIRATES',
+            'PEOPLES R CHINA': 'CHINA', 'PEOPLES REPUBLIC OF CHINA': 'CHINA', 'P R CHINA': 'CHINA',
+            'ENGLAND': 'UNITED KINGDOM', 'SCOTLAND': 'UNITED KINGDOM', 'WALES': 'UNITED KINGDOM',
+            'NORTHERN IRELAND': 'UNITED KINGDOM',
+        }
+
+        def extract_countries(aff_str: str) -> str:
+            if not isinstance(aff_str, str) or not aff_str.strip():
+                return ''
+            s = aff_str.strip()
+            segs = [p for p in s.split(';') if p.strip()]
+            countries = []
+            for seg in segs:
+                parts = seg.rsplit(',', 1)
+                cand = parts[-1] if parts else seg
+                cand = ascii_upper(cand).rstrip('.')
+                cand = re.sub(r"\s+", " ", cand)
+                if re.search(r"\bUSA\b$", cand):
+                    norm = 'UNITED STATES'
+                else:
+                    m = re.search(r"([A-Z][A-Z ]+)$", cand)
+                    tail = m.group(1).strip() if m else cand
+                    norm = synonyms.get(tail) or country_map.get(tail)
+                    if not norm:
+                        last_tok = tail.split()[-1]
+                        norm = synonyms.get(last_tok) or country_map.get(last_tok)
+                    if not norm:
+                        norm = tail
+                countries.append(norm)
+            return '; '.join(countries) if countries else ''
+
+        try:
+            if 'affiliations' in df.columns:
+                df['country'] = df['affiliations'].apply(extract_countries)
+        except Exception:
+            df['country'] = ''
+
         # --- Reorder to exact schema ---
         desired_order = [
             'author',
@@ -182,6 +256,7 @@ def scopus_csv_to_df(file_path, scimago, score_cutoff=85):
             'cited_by',
             'doi',
             'affiliations',
+            'country',
             'authors_with_affiliations',
             'abstract',
             'author_keywords',

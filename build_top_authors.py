@@ -6,7 +6,7 @@ def build_top_authors(all_dir: str, out_all: str = "MainArticles_Authors.csv", o
     """
     Build helper tables:
       - MainArticles_Authors.csv: SR and AuthorFullName for ismainarticle == TRUE
-      - Top10_Authors.csv: top 10 authors by count of distinct SR (main articles), with AuthorFullName
+      - Top10_Authors.csv: top 10 authors by count of distinct SR (main articles), grouped by AuthorFullName only
     """
     all_dir = Path(all_dir)
     art = pd.read_csv(all_dir / "All_Articles.csv")
@@ -31,14 +31,13 @@ def build_top_authors(all_dir: str, out_all: str = "MainArticles_Authors.csv", o
     out_all_path = all_dir / out_all
     aa[["SR", "AuthorFullName"]].to_csv(out_all_path, index=False)
 
-    # Top 10 by distinct SR
+    # Top 10 by distinct SR, grouping by AuthorFullName (ignore PersonID/AuthorID to avoid duplicate IDs)
     top = (
-        aa.groupby(key)["SR"]
+        aa.groupby("AuthorFullName")["SR"]
         .nunique()
         .reset_index(name="total_articles")
         .sort_values("total_articles", ascending=False)
         .head(10)
-        .merge(au[[key, "AuthorFullName"]], on=key, how="left")
     )
     out_top_path = all_dir / out_top10
     top.to_csv(out_top_path, index=False)
