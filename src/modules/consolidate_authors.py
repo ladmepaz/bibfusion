@@ -69,6 +69,18 @@ def consolidate_authors(author_df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataF
     df['__oa'] = df['OpenAlexAuthorID'].astype(str).apply(_short_openalex)
     df['__name_key'] = df['AuthorFullName'].astype(str).apply(_name_key)
     df['__email'] = df['Email'].astype(str).str.strip().str.lower()
+    # Scopus AuthorID (numeric) as a fallback ID for Scopus
+    def _norm_scopus_id(val: str) -> str:
+        if not isinstance(val, str):
+            return ''
+        s = val.strip()
+        # keep only digits/semicolons
+        if not s:
+            return ''
+        # take first token before separator
+        tok = s.split(';')[0].strip()
+        return tok if tok.isdigit() else ''
+    df['__scopus_id'] = df['AuthorID'].astype(str).apply(_norm_scopus_id)
 
     # Step 1: group by ORCID when present
     groups = {}
@@ -86,7 +98,14 @@ def consolidate_authors(author_df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataF
         groups[f'OA:{oa}'] = idxs
         assigned_idx.update(idxs)
 
-    # Step 3: remaining with name_key + email
+    # Step 3: remaining with Scopus AuthorID (numeric)
+    remaining = df.index.difference(list(assigned_idx))
+    for sid, g in df.loc[remaining][df.loc[remaining]['__scopus_id'] != ''].groupby('__scopus_id'):
+        idxs = list(g.index)
+        groups[f'SCOPUS:{sid}'] = idxs
+        assigned_idx.update(idxs)
+
+    # Step 4: remaining with name_key + email
     remaining = df.index.difference(list(assigned_idx))
     with_email = df.loc[remaining][df.loc[remaining]['__email'] != '']
     for _, g in with_email.groupby(['__name_key', '__email']):
@@ -97,7 +116,7 @@ def consolidate_authors(author_df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataF
         groups[f'NAMEEMAIL:{nk}|{em}'] = idxs
         assigned_idx.update(idxs)
 
-    # Step 4: remaining by name_key only
+    # Step 5: remaining by name_key only
     remaining = df.index.difference(list(assigned_idx))
     for nk, g in df.loc[remaining].groupby('__name_key'):
         idxs = list(g.index)
