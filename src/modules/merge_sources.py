@@ -274,6 +274,7 @@ def merge_citation(
         # replace ", 2025.0" -> ", 2025"
         s = re.sub(r",\s*(\d{4})\.0\b", r", \1", s)
         s = re.sub(r"\s+", " ", s).strip()
+        s = s.strip(' ,')
         return s
 
     def sr_key(sr: str):
@@ -366,6 +367,8 @@ def merge_citation(
                 return False
             if sr.strip().upper() in {'NAN', 'NONE'}:
                 return False
+            if sr.strip() in {'-'}:
+                return False
             if not re.search(r"[A-Z]", sr):
                 return False
             parts = [p.strip() for p in sr.split(',')]
@@ -383,6 +386,21 @@ def merge_citation(
             return True
 
         combined = combined[combined['SR_ref'].apply(valid_sr_ref)]
+
+    # Drop rows with invalid SR as well ('', '-', NaN)
+    def valid_sr(sr: str) -> bool:
+        if not isinstance(sr, str):
+            return False
+        if not sr.strip():
+            return False
+        if sr.strip() in {'-'}:
+            return False
+        if sr.strip().upper() in {'NAN', 'NONE'}:
+            return False
+        if re.fullmatch(r"\d{4}(\.0)?", sr.strip()):
+            return False
+        return True
+    combined = combined[combined['SR'].apply(valid_sr)]
 
     combined = combined.drop(columns=['__key', '__key_ref', '__source'], errors='ignore')
     combined = combined.drop_duplicates()

@@ -36,6 +36,7 @@ def scopus_get_article_entity(scopus_df_3):
     'authors_id',
     'authors_with_affiliations',
     'affiliations',
+    'country',
     'document_type',
     'publication_stage',
     'journal',

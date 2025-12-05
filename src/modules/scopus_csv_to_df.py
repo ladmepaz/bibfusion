@@ -112,17 +112,6 @@ def scopus_csv_to_df(file_path, scimago, score_cutoff=85):
                     abbreviated_list.append('')
 
             df['abbreviated_source_title'] = abbreviated_list
-        # --- Build SR ---
-        if all(col in df.columns for col in ('author', 'year', 'abbreviated_source_title')):
-            df['SR'] = df.apply(
-                lambda r: (
-                    ", ".join(r['author'].split(';')[0].split(',')[:2]).replace('.', '').strip() +
-                    f", {r['year']}, {r['abbreviated_source_title'].replace('.', '')}"
-                ),
-                axis=1
-            )
-
-
         # --- Final renames for clarity ---
         df.rename(columns={
             'abbreviated_source_title': 'source_title',
@@ -134,25 +123,6 @@ def scopus_csv_to_df(file_path, scimago, score_cutoff=85):
             # Primero reemplazamos NaN por '' para que no queden como 'nan'
             df["source_title"] = df["source_title"].replace("nan", "")
             df['source_title'] = df['source_title'].astype(str).str.replace('.', '', regex=False)
-        df['SR'] = (
-            df['SR']
-            .str.replace(r'^,\s*', '', regex=True)                # elimina la coma inicial y espacios
-            .str.replace(r'(?<=,)\s{2,}', ' ', regex=True)        # reemplaza dobles espacios solo después de una coma
-        )
-
-        def transform_sr(valor):
-            if pd.isna(valor):
-                return valor
-            partes = [p.strip() for p in valor.split(",")]
-            if len(partes) < 4:
-                return valor  # por si la cadena no tiene el formato esperado
-            inicial = partes[0]
-            apellido = partes[1]
-            resto = ", ".join(partes[2:])
-            return f"{apellido} {inicial}, {resto}"
-
-        df["SR"] = df["SR"].apply(transform_sr)
-
         # Rebuild SR using author_full_names (more robust) -> LAST FIRSTINITIAL, YEAR, SOURCE_TITLE
         def build_sr(row):
             auths = str(row.get('author_full_names') or '').split(';')
@@ -181,6 +151,13 @@ def scopus_csv_to_df(file_path, scimago, score_cutoff=85):
             return ', '.join(sr_parts)
 
         df['SR'] = df.apply(build_sr, axis=1)
+        df['SR'] = (
+            df['SR']
+            .str.replace(r'^,\s*', '', regex=True)
+            .str.replace(r'\s+,', ', ', regex=True)
+            .str.replace(r',\s*,', ', ', regex=True)
+            .str.strip(' ,')
+        )
 
         # --- Derive 'country' from 'affiliations' (similar a WoS) ---
         def load_country_map():
@@ -289,6 +266,10 @@ def scopus_csv_to_df(file_path, scimago, score_cutoff=85):
         ]
         existing = [c for c in desired_order if c in df.columns]
         df = df[existing]
+
+        # Drop fully empty rows and mark main articles
+        df = df.dropna(how='all')
+        df['ismainarticle'] = True
 
         return df
 
