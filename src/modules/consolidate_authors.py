@@ -235,11 +235,13 @@ def consolidate_authors(author_df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataF
         orcid_primary = orcids[0] if orcids else ''
         oas = sorted({ _short_openalex(o) for o in g['OpenAlexAuthorID'].astype(str) if _short_openalex(o) })
         emails = sorted({ e for e in g['Email'].astype(str).str.lower() if e })
+        author_ids = sorted({ aid for aid in g['AuthorID'].astype(str) if aid and aid.upper() not in {'NAN', 'NONE'} })
         person_rows.append({
             'PersonID': pid,
             'CanonicalName': canonical_name,
             'Orcid': orcid_primary,
             'OpenAlexIDs': '; '.join(oas) if oas else '',
+            'AuthorIDs': '; '.join(author_ids) if author_ids else '',
             'Emails': '; '.join(emails) if emails else '',
             'NameVariants': '; '.join(sorted(set(names))) if names else '',
             'AliasCount': len(g),
