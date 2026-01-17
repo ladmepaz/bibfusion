@@ -124,18 +124,61 @@ def unify_author_fullname_and_orcid(
     final_df = pd.concat(all_results, ignore_index=True)
     final_df['UnifiedOrcid'] = final_df['UnifiedOrcid'].fillna('NO ORCID')
     final_df['UnifiedName'] = final_df['UnifiedName'].str.rstrip('.')
-    # Create the AuthorID column by concatenating AuthorName, AuthorFullName, and UnifiedOrcid
-    final_df['AuthorID'] = (
-        final_df['AuthorName'] + '_' +
-        final_df['UnifiedName'] + '_' +
-        final_df['UnifiedOrcid']
-    )
-    # Clean the AuthorID column: remove special characters and replace spaces with underscores
-    final_df['AuthorID'] = (
-        final_df['AuthorID']
-        .str.replace(r'[.,]', '', regex=True)  # Remove '.' and ','
-        .str.replace(r'\s+', '_', regex=True)  # Replace spaces with '_'
-    )
+
+    # Build a stable AuthorID preferring ORCID, then OpenAlexAuthorID, else name-based
+    def _norm_orcid(val: str) -> str:
+        if not isinstance(val, str):
+            return ''
+        s = val.strip()
+        if not s or s.upper() == 'NO ORCID':
+            return ''
+        # Take last path segment if a URL, otherwise the raw string
+        return s.split('/')[-1]
+
+    def _short_openalex_id(val: str) -> str:
+        if not isinstance(val, str):
+            return ''
+        s = val.strip()
+        return s.split('/')[-1] if s else ''
+
+    final_df['__OrcidNorm'] = final_df['UnifiedOrcid'].apply(_norm_orcid)
+    if 'OpenAlexAuthorID' in final_df.columns:
+        final_df['__OAshort'] = final_df['OpenAlexAuthorID'].apply(_short_openalex_id)
+    else:
+        final_df['__OAshort'] = ''
+
+    # If an ORCID maps to multiple distinct OpenAlex IDs, prefer OA for disambiguation
+    if 'OpenAlexAuthorID' in final_df.columns:
+        # Build mapping: orcid_norm -> number of distinct OA ids (excluding empty)
+        counts = (
+            final_df.assign(__oa_nonempty=final_df['__OAshort'].astype(str).str.len() > 0)
+                    .groupby('__OrcidNorm')['__OAshort']
+                    .nunique(dropna=True)
+        )
+        # Convert to dict for fast lookup
+        orcid_to_oa_unique = counts.to_dict()
+    else:
+        orcid_to_oa_unique = {}
+
+    def _make_author_id(row):
+        orcid_norm = row['__OrcidNorm']
+        oa_short = row['__OAshort']
+        # If this ORCID appears with multiple OpenAlex IDs, prefer OA to avoid collapsing distinct authors
+        if orcid_norm and orcid_to_oa_unique.get(orcid_norm, 0) > 1 and oa_short:
+            return f"OA:{oa_short}"
+        if orcid_norm:
+            return f"ORCID:{orcid_norm}"
+        if oa_short:
+            return f"OA:{oa_short}"
+        # Fallback to name-based key (stable but less precise)
+        base = f"{row.get('UnifiedName','') or ''}".strip()
+        base = base.replace(',', '').replace('.', '')
+        base = '_'.join(base.split())
+        return f"NAME:{base.upper()}"
+
+    final_df['AuthorID'] = final_df.apply(_make_author_id, axis=1)
+    # Cleanup temp cols
+    final_df = final_df.drop(columns=['__OrcidNorm', '__OAshort'], errors='ignore')
 
     final_df = final_df.rename(columns={
     'AuthorFullName': 'AuthorFullName_old',
@@ -144,12 +187,22 @@ def unify_author_fullname_and_orcid(
     'UnifiedOrcid': 'Orcid'
     })
 
-    # Create the three DataFrames
-    wos_author = final_df[['AuthorID', 'AuthorName', 'AuthorFullName', 'Orcid', 'ResearcherID', 'Email']]
+    # Create the three DataFrames (carry OpenAlex IDs when available)
+    wos_author_cols = [
+        'AuthorID', 'AuthorName', 'AuthorFullName', 'Orcid', 'ResearcherID', 'Email',
+        'OpenAlexAuthorID'
+    ]
+    wos_author = final_df[[c for c in wos_author_cols if c in final_df.columns]]
     wos_author = wos_author.drop_duplicates(subset=['AuthorID'])
-    articleauthor = final_df[['SR', 'AuthorID', 'AuthorOrder', 'CorrespondingAuthor']]
+
+    articleauthor_cols = [
+        'SR', 'openalex_work_id', 'AuthorID', 'AuthorOrder', 'CorrespondingAuthor', 'OpenAlexAuthorID'
+    ]
+    articleauthor = final_df[[c for c in articleauthor_cols if c in final_df.columns]]
     articleauthor = articleauthor.drop_duplicates()
-    wos_author_affiliation = final_df[['SR', 'AuthorID', 'Affiliation']]
+
+    wos_author_affiliation_cols = ['SR', 'AuthorID', 'Affiliation']
+    wos_author_affiliation = final_df[[c for c in wos_author_affiliation_cols if c in final_df.columns]]
     wos_author_affiliation = wos_author_affiliation.drop_duplicates()
 
     # Return the three DataFrames as a list

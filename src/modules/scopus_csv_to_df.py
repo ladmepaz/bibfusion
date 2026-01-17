@@ -1,5 +1,6 @@
 import pandas as pd
 import re
+import unicodedata
 from rapidfuzz import process, fuzz
 
 def scopus_csv_to_df(file_path, scimago, score_cutoff=85):
@@ -29,7 +30,32 @@ def scopus_csv_to_df(file_path, scimago, score_cutoff=85):
 
         df.columns = transform_column_labels(df.columns)
 
-        # --- Uppercase key text fields ---
+        # --- Uppercase key text fields (ASCII) ---
+        MAPEO_ESPECIAL = str.maketrans({
+            "Ø": "O", "ø": "o",
+            "Æ": "AE", "æ": "ae",
+            "Å": "A", "å": "a",
+            "Ð": "D", "ð": "d",
+            "Þ": "Th", "þ": "th",
+            "ß": "ss",
+        })
+
+        def ascii_upper(val):
+            """
+            Normalize to ASCII-only upper-case:
+            - NFD to break accents
+            - drop combining marks
+            - manual mapping for characters that do not decompose (e.g., Ø -> O)
+            - encode/decode ASCII ignoring leftovers
+            """
+            if pd.isna(val):
+                return ''
+            s = str(val)
+            norm = unicodedata.normalize('NFD', s)
+            no_marks = ''.join(ch for ch in norm if not unicodedata.combining(ch))
+            mapped = no_marks.translate(MAPEO_ESPECIAL)
+            return mapped.encode('ascii', 'ignore').decode('ascii').upper()
+
         cols_to_upper = [
             'authors', 'author_full_names', 'title', 'source_title', 'affiliations',
             'authors_with_affiliations', 'abstract', 'author_keywords', 'index_keywords',
@@ -41,7 +67,7 @@ def scopus_csv_to_df(file_path, scimago, score_cutoff=85):
 
         for c in cols_to_upper:
             if c in df.columns:
-                df[c] = df[c].astype(str).str.upper()
+                df[c] = df[c].apply(ascii_upper)
 
         # --- Pre-SR renames ---
         df.rename(columns={
@@ -86,17 +112,6 @@ def scopus_csv_to_df(file_path, scimago, score_cutoff=85):
                     abbreviated_list.append('')
 
             df['abbreviated_source_title'] = abbreviated_list
-        # --- Build SR ---
-        if all(col in df.columns for col in ('author', 'year', 'abbreviated_source_title')):
-            df['SR'] = df.apply(
-                lambda r: (
-                    ", ".join(r['author'].split(';')[0].split(',')[:2]).replace('.', '').strip() +
-                    f", {r['year']}, {r['abbreviated_source_title'].replace('.', '')}"
-                ),
-                axis=1
-            )
-
-
         # --- Final renames for clarity ---
         df.rename(columns={
             'abbreviated_source_title': 'source_title',
@@ -108,24 +123,97 @@ def scopus_csv_to_df(file_path, scimago, score_cutoff=85):
             # Primero reemplazamos NaN por '' para que no queden como 'nan'
             df["source_title"] = df["source_title"].replace("nan", "")
             df['source_title'] = df['source_title'].astype(str).str.replace('.', '', regex=False)
+        # Rebuild SR using author_full_names (more robust) -> LAST FIRSTINITIAL, YEAR, SOURCE_TITLE
+        def build_sr(row):
+            auths = str(row.get('author_full_names') or '').split(';')
+            first = auths[0].strip() if auths else ''
+            # Remove any IDs in parentheses
+            import re
+            first_clean = re.sub(r'\\(.*?\\)', '', first).strip()
+            # try to parse "LAST, FIRST" or "FIRST LAST"
+            if ',' in first_clean:
+                last, first_names = [x.strip() for x in first_clean.split(',', 1)]
+                init = first_names[0].upper() if first_names else ''
+                base = f"{last.upper()} {init}" if init else last.upper()
+            else:
+                parts = [p.strip() for p in first_clean.split() if p.strip()]
+                if len(parts) >= 2:
+                    last = parts[-1].upper()
+                    init = parts[0][0].upper()
+                    base = f"{last} {init}"
+                elif parts:
+                    base = parts[0].upper()
+                else:
+                    base = ''
+            year = str(row.get('year') or '').strip()
+            source = str(row.get('source_title') or '').strip().upper()
+            sr_parts = [p for p in [base, year, source] if p]
+            return ', '.join(sr_parts)
+
+        df['SR'] = df.apply(build_sr, axis=1)
         df['SR'] = (
             df['SR']
-            .str.replace(r'^,\s*', '', regex=True)                # elimina la coma inicial y espacios
-            .str.replace(r'(?<=,)\s{2,}', ' ', regex=True)        # reemplaza dobles espacios solo después de una coma
+            .str.replace(r'^,\s*', '', regex=True)
+            .str.replace(r'\s+,', ', ', regex=True)
+            .str.replace(r',\s*,', ', ', regex=True)
+            .str.strip(' ,')
         )
 
-        def transform_sr(valor):
-            if pd.isna(valor):
-                return valor
-            partes = [p.strip() for p in valor.split(",")]
-            if len(partes) < 4:
-                return valor  # por si la cadena no tiene el formato esperado
-            inicial = partes[0]
-            apellido = partes[1]
-            resto = ", ".join(partes[2:])
-            return f"{apellido} {inicial}, {resto}"
+        # --- Derive 'country' from 'affiliations' (similar a WoS) ---
+        def load_country_map():
+            country_map = {}
+            try:
+                repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+                country_csv = os.path.join(repo_root, 'tests', 'files', 'country.csv')
+                if os.path.exists(country_csv):
+                    cdf = pd.read_csv(country_csv, sep=';')
+                    for name in cdf.get('Name', pd.Series(dtype=str)).astype(str):
+                        up = ascii_upper(name)
+                        if up:
+                            country_map[up] = up
+            except Exception:
+                country_map = {}
+            return country_map
 
-        df["SR"] = df["SR"].apply(transform_sr)
+        country_map = load_country_map()
+        synonyms = {
+            'USA': 'UNITED STATES', 'U S A': 'UNITED STATES', 'UNITED STATES OF AMERICA': 'UNITED STATES',
+            'U ARAB EMIR': 'UNITED ARAB EMIRATES', 'UNITED ARAB EMIR': 'UNITED ARAB EMIRATES',
+            'PEOPLES R CHINA': 'CHINA', 'PEOPLES REPUBLIC OF CHINA': 'CHINA', 'P R CHINA': 'CHINA',
+            'ENGLAND': 'UNITED KINGDOM', 'SCOTLAND': 'UNITED KINGDOM', 'WALES': 'UNITED KINGDOM',
+            'NORTHERN IRELAND': 'UNITED KINGDOM',
+        }
+
+        def extract_countries(aff_str: str) -> str:
+            if not isinstance(aff_str, str) or not aff_str.strip():
+                return ''
+            s = aff_str.strip()
+            segs = [p for p in s.split(';') if p.strip()]
+            countries = []
+            for seg in segs:
+                parts = seg.rsplit(',', 1)
+                cand = parts[-1] if parts else seg
+                cand = ascii_upper(cand).rstrip('.')
+                cand = re.sub(r"\s+", " ", cand)
+                if re.search(r"\bUSA\b$", cand):
+                    norm = 'UNITED STATES'
+                else:
+                    m = re.search(r"([A-Z][A-Z ]+)$", cand)
+                    tail = m.group(1).strip() if m else cand
+                    norm = synonyms.get(tail) or country_map.get(tail)
+                    if not norm:
+                        last_tok = tail.split()[-1]
+                        norm = synonyms.get(last_tok) or country_map.get(last_tok)
+                    if not norm:
+                        norm = tail
+                countries.append(norm)
+            return '; '.join(countries) if countries else ''
+
+        try:
+            if 'affiliations' in df.columns:
+                df['country'] = df['affiliations'].apply(extract_countries)
+        except Exception:
+            df['country'] = ''
 
         # --- Reorder to exact schema ---
         desired_order = [
@@ -145,6 +233,7 @@ def scopus_csv_to_df(file_path, scimago, score_cutoff=85):
             'cited_by',
             'doi',
             'affiliations',
+            'country',
             'authors_with_affiliations',
             'abstract',
             'author_keywords',
@@ -177,6 +266,10 @@ def scopus_csv_to_df(file_path, scimago, score_cutoff=85):
         ]
         existing = [c for c in desired_order if c in df.columns]
         df = df[existing]
+
+        # Drop fully empty rows and mark main articles
+        df = df.dropna(how='all')
+        df['ismainarticle'] = True
 
         return df
 
