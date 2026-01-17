@@ -9,6 +9,7 @@ from modules import get_wos_author_data  # Gets author data from WoS
 from modules import enrich_wos_author_data  # Enriches WoS author data
 from modules import get_article_entity  # Gets article entity from WoS
 from modules import enrich_references_with_openalex # General reference enrichment with OpenAlex
+from modules import enrich_wos_with_openalex_authors  # Enrich WoS authors (names/ORCIDs/IDs) via OpenAlex
 
 # ==========================
 #  Scopus
@@ -18,6 +19,7 @@ from modules import scopus_csv_to_df # Converts Scopus .csv files to DataFrame
 from modules import merge_scopus_ref # Merges Scopus references
 from modules import get_scopus_author_data # Gets author data from Scopus
 from modules import enrich_scopus_author_data  # Enriches Scopus author data
+from modules import enrich_scopus_with_openalex_authors  # Enriches Scopus authors from OpenAlex
 from modules import generate_references_column, generate_SR_ref, openalex_enrich_ref, fill_source_title_from_scimago
 from modules import citation_scopus  # Extracts citations from Scopus
 from modules import scopus_get_article_entity  # Gets article entity from Scopus
@@ -49,6 +51,8 @@ from modules import fill_missing_issn_eissn_with_scimago # Fills missing ISSN/EI
 from modules import resolve_duplicate_sourceids # Resolves duplicate source IDs in WoS
 from modules import add_year_and_scimago_info # Adds year and Scimago info to scimagodb
 from modules import export_csvs_as_excel # Combines CSV files into an Excel file
+from modules import merge_all_entities  # Merge WoS + Scopus entities into consolidated All_* CSVs
+from modules import consolidate_authors  # Consolidate authors into person-level identities
 
 # ============================
 # utils
@@ -79,6 +83,7 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         # Take the first file to obtain the base folder (they are all in the same folder)
         base_dir = os.path.dirname(path_wos[0])
         output_dir = os.path.join(base_dir, "WoS_results")
+        wos_output_dir = output_dir
 
         # Create the folder if it doesn't exist
         os.makedirs(output_dir, exist_ok=True)
@@ -98,6 +103,16 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         wos_df, duplicates_removed = remove_duplicates_df(wos_df)
         wos_df.to_csv(os.path.join(output_dir, "2_temp_wos_df_removeDuplicates.csv"), index=False)
         print(f"2. Duplicados removidos: {duplicates_removed}")
+
+        # Enrich WoS main articles with OpenAlex authors (names in uppercase ASCII, replace ORCID)
+        wos_df = enrich_wos_with_openalex_authors(
+            wos_df,
+            replace=True,
+            keep_raw=False,
+            uppercase_ascii=True,
+        )
+        wos_df.to_csv(os.path.join(output_dir, "2-1_temp_wos_df_openalex_authors.csv"), index=False)
+        print("2.1. Autores de WoS enriquecidos con OpenAlex (nombres/ORCID/IDs)")
 
         # Get references
         wos_references, wos_citation = get_wos_references(wos_df)
@@ -122,7 +137,8 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         #           Scimago Dataframe
         ##############################################
 
-        scimago = pd.read_csv('tests/files/scimago/scimago.csv')
+        # Load Scimago reference data (correct relative path)
+        scimago = pd.read_csv('tests/files/scimago.csv')
 
         wos_df_4 = standarize_journal_data(wos_df_3)
         wos_df_4.to_csv(os.path.join(output_dir,'5-1_temp_wos_df_standarized.csv'), index=False)
@@ -175,6 +191,26 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         articleauthor_wos.to_csv(os.path.join(output_dir,'ArticleAuthor.csv'), index=False)
         wos_author_affiliation_no_country.to_csv(os.path.join(output_dir,'10_temp_wos_author_affiliation.csv'), index=False)
 
+        # Consolidate authors to person-level identities and export auxiliary mappings
+        try:
+            author_person, author_alias, author_conflicts = consolidate_authors(wos_author)
+            author_person.to_csv(os.path.join(output_dir, 'AuthorPerson.csv'), index=False)
+            author_alias.to_csv(os.path.join(output_dir, 'AuthorAlias.csv'), index=False)
+            author_conflicts.to_csv(os.path.join(output_dir, 'AuthorConflicts.csv'), index=False)
+            print("10.1. Consolidación de autores generada: AuthorPerson/AuthorAlias/AuthorConflicts")
+
+            # Add PersonID back into Author and ArticleAuthor for stronger joins
+            alias_map = author_alias[['AuthorID', 'PersonID']].drop_duplicates()
+            wos_author_pid = wos_author.merge(alias_map, on='AuthorID', how='left')
+            articleauthor_pid = articleauthor_wos.merge(alias_map, on='AuthorID', how='left')
+
+            # Overwrite with PersonID-enriched versions
+            wos_author_pid.to_csv(os.path.join(output_dir,'Author.csv'), index=False)
+            articleauthor_pid.to_csv(os.path.join(output_dir,'ArticleAuthor.csv'), index=False)
+            print("10.2. Añadido PersonID a Author y ArticleAuthor")
+        except Exception as e:
+            print(f"[WARN] Falló la consolidación de autores: {e}")
+
         # Get country affiliation
         country_codes_file = "tests/files/country.csv"
         affiliation_0 = fill_missing_affiliations(wos_author_affiliation_no_country)
@@ -191,39 +227,12 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         #        Get ToS (root, trunk, branchs)
         ##############################################
         
-        # Get the citation network (root, trunk, branches)
-        citation_network = get_citation_network(wos_citation)
-        print("13. network de Scopus obtenida")
+        ##############################################
+        #        Get ToS (root, trunk, branchs)
+        ##############################################
 
-        # Clean the citation network
-        citation_network = clean_citation_network(citation_network)
-        print("14. network de Scopus limpiada")
-
-        # Add community branches
-        citation_network = add_community_branch(citation_network)
-        print("15. branches de la network de Scopus añadidas")
-
-        # Get ToS (root, trunk, branches)
-        tos = get_tos(citation_network)
-        print("16. ToS de la network de WoS obtenida")
-
-        # Convert ToS to DataFrame
-        df_nodos, df_aristas, df_tos_initial = graph_to_df(tos)
-        df_nodos.to_csv(os.path.join(output_dir,'tos_df_nodes.csv'), index=False)
-        df_aristas.to_csv(os.path.join(output_dir,'tos_df_edges.csv'), index=False)
-        print("17. ToS de la network de WoS convertida a DataFrame, nodos y aristas exportados.")
-
-        # Get ToS DataFrame
-        dataframe_tos_initial = merge_tos_with_articles(df_tos_initial, article)
-        print("18. Sacada la información de la network de WoS de 'Article'")
-
-        # Clean and sort ToS
-        tos_df = sort_by_tos_and_year(dataframe_tos_initial)
-        tos_df.to_csv(os.path.join(output_dir,'TreeOfScience.csv'), index=False)
-
-        # Combine CSV to Excel
-        export_csvs_as_excel(output_dir)
-        print("19. Archivos CSV combinados a Excel")
+        # Tree of Science generation skipped for WoS (legacy)
+        print("13. Tree of Science (WoS) omitido; se generan solo CSVs")
 
     else:
         print("""
@@ -237,6 +246,7 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         # Obtain the folder where the path_scopus file is located
         base_dir = os.path.dirname(path_scopus)
         output_dir = os.path.join(base_dir, "Scopus_results")
+        scopus_output_dir = output_dir
         # Create the folder if it doesn't exist
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
@@ -248,7 +258,8 @@ def preprocesing_df(path_wos=None,path_scopus=None):
               """)
         
         # Load Scimago df
-        scimago = pd.read_csv('tests/files/scimago/scimago.csv')
+        # Load Scimago reference data (correct relative path)
+        scimago = pd.read_csv('tests/files/scimago.csv')
         
         # Dataframe
         scopus_df = scopus_csv_to_df(path_scopus, scimago)
@@ -261,6 +272,16 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         scopus_df_2.to_csv(os.path.join(output_dir,'2_temp_scopus_df_2.csv'), index=False)
         # scopus_df_2 = pd.read_csv(os.path.join(output_dir,'2_temp_scopus_df_2.csv'))
         print(f"2. Duplicados removidos: {duplicates_removed}")
+
+        # Enrich Scopus main articles with OpenAlex authors (names uppercase ASCII, ORCID, IDs)
+        scopus_df_2 = enrich_scopus_with_openalex_authors(
+            scopus_df_2,
+            replace=True,
+            uppercase_ascii=True,
+            keep_raw=False,
+        )
+        scopus_df_2.to_csv(os.path.join(output_dir,'2-1_temp_scopus_df_openalex_authors.csv'), index=False)
+        print("2.1. Autores de Scopus enriquecidos con OpenAlex (nombres/ORCID/IDs)")
 
         
         # Extract references
@@ -303,6 +324,21 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         scopus_df_3.to_csv(os.path.join(output_dir,'7_temp_scopus_df_3.csv'), index=False)
         # scopus_df_3 = pd.read_csv(os.path.join(output_dir,'7_temp_scopus_df_3.csv'))
         print("8.1. Nombres de autores rellenados desde nombres completos")
+
+        # Extraer país desde affiliations (similar a WoS)
+        def _extract_country_from_aff(aff_str: str) -> str:
+            if not isinstance(aff_str, str) or not aff_str.strip():
+                return ''
+            parts = [p.strip() for p in aff_str.split(';') if p.strip()]
+            countries = []
+            for p in parts:
+                segs = [s.strip() for s in p.split(',') if s.strip()]
+                if segs:
+                    countries.append(segs[-1].upper())
+            return '; '.join(countries)
+
+        if 'affiliations' in scopus_df_3.columns:
+            scopus_df_3['country'] = scopus_df_3['affiliations'].apply(_extract_country_from_aff)
 
         # Article Dataframe
         article = scopus_get_article_entity(scopus_df_3)
@@ -380,6 +416,21 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         print("17. Generado scopus_author, articleauthor_scopus y scopus_author_affiliation")
 
 
+        # Consolidate Scopus authors and propagate PersonID
+        try:
+            author_person, author_alias, author_conflicts = consolidate_authors(scopus_author)
+            author_person.to_csv(os.path.join(output_dir, 'AuthorPerson.csv'), index=False)
+            author_alias.to_csv(os.path.join(output_dir, 'AuthorAlias.csv'), index=False)
+            author_conflicts.to_csv(os.path.join(output_dir, 'AuthorConflicts.csv'), index=False)
+            alias_map = author_alias[['AuthorID','PersonID']].drop_duplicates()
+            scopus_author_pid = scopus_author.merge(alias_map, on='AuthorID', how='left')
+            articleauthor_scopus_pid = articleauthor_scopus.merge(alias_map, on='AuthorID', how='left')
+            scopus_author_pid.to_csv(os.path.join(output_dir,'Author.csv'), index=False)
+            articleauthor_scopus_pid.to_csv(os.path.join(output_dir,'ArticleAuthor.csv'), index=False)
+            print("17.1. Consolidación de autores (Scopus) generada y PersonID propagado")
+        except Exception as e:
+            print(f"[WARN] Falló la consolidación de autores (Scopus): {e}")
+
         # Get country affiliation
         country_codes_file = "tests/files/country.csv"
         affiliation_0 = fill_missing_affiliations(scopus_author_affiliation_no_country)
@@ -392,39 +443,22 @@ def preprocesing_df(path_wos=None,path_scopus=None):
         #        Get ToS (root, trunk, branchs)
         ##############################################
         
-        # Get the citation network (root, trunk, branches)
-        citation_network = get_citation_network(scopus_citation)
-        print("19. network de Scopus obtenida")
+        ##############################################
+        #        Get ToS (root, trunk, branchs)
+        ##############################################
 
-        # Clean the citation network
-        citation_network = clean_citation_network(citation_network)
-        print("20. network de Scopus limpiada")
+        # Tree of Science generation skipped for Scopus (legacy)
+        print("19. Tree of Science (Scopus) omitido; se generan solo CSVs")
 
-        # Add community branches
-        citation_network = add_community_branch(citation_network)
-        print("21. branches de la network de Scopus añadidas")
-
-        # Get ToS (root, trunk, branches)
-        tos = get_tos(citation_network)
-        print("22. ToS de la network de Scopus obtenida")
-
-        # Convert ToS to DataFrame
-        df_nodos, df_aristas, df_tos_initial = graph_to_df(tos)
-        df_nodos.to_csv(os.path.join(output_dir,'tos_df_nodes.csv'), index=False)
-        df_aristas.to_csv(os.path.join(output_dir,'tos_df_edges.csv'), index=False)
-        print("23. ToS de la network de Scopus convertida a DataFrame, nodos y aristas exportados.")
-
-        # Get ToS DataFrame
-        dataframe_tos_initial = merge_tos_with_articles(df_tos_initial, article)
-        print("24. Sacada la información de la network de Scopus de 'Article'")
-
-        # Clean and sort ToS
-        tos_df = sort_by_tos_and_year(dataframe_tos_initial)
-        tos_df.to_csv(os.path.join(output_dir,'TreeOfScience.csv'), index=False)
-
-        # Combine CSV to Excel
-        export_csvs_as_excel(output_dir)
-        print("25. Archivos CSV combinados a Excel")
+        # Consolidated All_* outputs when both sources are available
+        try:
+            if path_wos:
+                base_dir_w = os.path.dirname(path_wos[0]) if isinstance(path_wos, list) else os.path.dirname(path_wos)
+                all_dir = os.path.join(base_dir_w, 'all_data_wos_scopus')
+                merge_all_entities(wos_output_dir, scopus_output_dir, all_dir)
+                print("20. Generados All_* (WoS+Scopus) en 'all_data_wos_scopus'")
+        except Exception as e:
+            print(f"[WARN] Falló la unión WoS+Scopus: {e}")
 
     else:
         print("""
@@ -506,7 +540,10 @@ def preprocesing_df(path_wos=None,path_scopus=None):
     return None
 
 # preprocesing_df(r"path_wos" or [r"path_wos",r"path_wos_2"], r"path_scopus")
-preprocesing_df(
-                None, 
-                None
-                )
+if __name__ == "__main__":
+    # Example/manual run (disabled by default)
+    # preprocesing_df(
+    #   path_wos=[r"C:\\path\\to\\wos.txt"],
+    #   path_scopus=r"C:\\path\\to\\scopus.csv"
+    # )
+    pass

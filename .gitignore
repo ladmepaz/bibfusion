@@ -1,0 +1,17 @@
+﻿# Local outputs and large artifacts
+all_data_wos_scopus/*.csv
+all_data_wos_scopus/*.xlsx
+Scopus_results/**
+WoS_results/**
+*.log
+*.tmp
+*.bak
+src/**/__pycache__/**
+__pycache__/**
+*.pyc
+# Local notebooks and temp
+*.ipynb_checkpoints/**
+.tmp_*
+*.DS_Store
+# Large test data (handled externally)
+tests/files/scimago.csv

@@ -43,7 +43,19 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
     wos_df_cleaned = wos_df_3[~wos_df_3['SR'].isin(invalid_sr_values)].copy()
 
     # Step 2: Create 'wos_authors' dataframe with required columns
-    required_columns = ['SR', 'author', 'author_full_names', 'affiliations', 'reprint_address', 'orcid', 'researcher_id_number', 'email_address']
+    # Include OpenAlex fields coming from previous enrichment steps
+    required_columns = [
+        'SR',
+        'author',
+        'author_full_names',
+        'affiliations',
+        'reprint_address',
+        'orcid',
+        'researcher_id_number',
+        'email_address',
+        'author_id_openalex',       # semicolon-separated OpenAlex author IDs aligned with authors
+        'openalex_work_id',         # OpenAlex work ID for the article
+    ]
     for col in required_columns:
         if col not in wos_df_cleaned.columns:
             wos_df_cleaned[col] = ''
@@ -53,6 +65,8 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
     wos_authors['affiliations'] = wos_authors['affiliations'].fillna('')
     wos_authors['reprint_address'] = wos_authors['reprint_address'].fillna('')
     wos_authors['orcid'] = wos_authors['orcid'].fillna('')
+    wos_authors['author_id_openalex'] = wos_authors['author_id_openalex'].fillna('')
+    wos_authors['openalex_work_id'] = wos_authors['openalex_work_id'].fillna('')
     wos_authors['researcher_id_number'] = wos_authors['researcher_id_number'].fillna('')
     wos_authors['email_address'] = wos_authors['email_address'].fillna('')
 
@@ -340,6 +354,51 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
 
     authors_df['Orcid'] = authors_df.apply(assign_orcid, axis=1)
 
+    # Step 15: Map OpenAlex Author IDs per author order and attach work ID
+    def split_semicolon_list(val: str):
+        if not isinstance(val, str):
+            return []
+        return [p.strip() for p in val.split(';') if p.strip()]
+
+    # Build SR -> list(OpenAlex Author IDs) mapping and SR -> work_id mapping
+    sr_to_author_ids = dict(zip(
+        wos_authors['SR'],
+        wos_authors['author_id_openalex'].astype(str).apply(split_semicolon_list)
+    ))
+    sr_to_work_id = dict(zip(
+        wos_authors['SR'],
+        wos_authors['openalex_work_id'].astype(str)
+    ))
+
+    def assign_openalex_author_id(row):
+        lst = sr_to_author_ids.get(row['SR'], [])
+        try:
+            idx = int(row['AuthorOrder']) - 1
+        except Exception:
+            idx = -1
+        if idx is not None and 0 <= idx < len(lst):
+            return lst[idx]
+        return ''
+
+    authors_df['OpenAlexAuthorID'] = authors_df.apply(assign_openalex_author_id, axis=1)
+    authors_df['openalex_work_id'] = authors_df['SR'].map(sr_to_work_id)
+
+    # Step 15b: Reorder columns to place 'openalex_work_id' next to 'SR' if present
+    def reorder_columns(df_in: pd.DataFrame) -> pd.DataFrame:
+        cols = list(df_in.columns)
+        if 'SR' in cols and 'openalex_work_id' in cols:
+            cols.remove('openalex_work_id')
+            sr_index = cols.index('SR')
+            cols.insert(sr_index + 1, 'openalex_work_id')
+        # Prefer to show OpenAlexAuthorID before Orcid if both exist
+        if 'OpenAlexAuthorID' in cols and 'Orcid' in cols:
+            cols.remove('OpenAlexAuthorID')
+            orcid_index = cols.index('Orcid')
+            cols.insert(orcid_index, 'OpenAlexAuthorID')
+        return df_in[cols]
+
+    authors_df = reorder_columns(authors_df)
+
     # def get_author_orcid(row):
     #     # Standardize the author's full name
     #     author_full_name_std = standardize_name_for_matching(row['AuthorFullName'])
@@ -562,8 +621,13 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
     authors_df = authors_df.drop(columns=['affiliations', 'AffiliationsList', 'reprint_address', 'CorrespondingAuthorName', 'orcid',
                                           'OrcidList', 'researcher_id_number', 'ResearcherIDList', 'email_address']).reset_index(drop=True)
 
-    # Step 18: Select relevant columns
-    authors_df = authors_df[['SR', 'AuthorOrder', 'AuthorName', 'AuthorFullName', 'Affiliation',
-                             'CorrespondingAuthor', 'Orcid', 'ResearcherID', 'Email']]
+    # Step 18: Select relevant columns (include OpenAlex IDs and place work_id next to SR)
+    cols_final = [
+        'SR', 'openalex_work_id', 'AuthorOrder', 'AuthorName', 'AuthorFullName', 'Affiliation',
+        'CorrespondingAuthor', 'OpenAlexAuthorID', 'Orcid', 'ResearcherID', 'Email'
+    ]
+    # Keep only columns that exist to avoid KeyError if some fields are missing
+    cols_existing = [c for c in cols_final if c in authors_df.columns]
+    authors_df = authors_df[cols_existing]
 
     return authors_df

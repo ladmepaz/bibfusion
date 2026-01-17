@@ -1,20 +1,33 @@
-def get_article_entity(wos_df_3):
-    """
-    Delete duplicate rows based on 'doi'
-    Selects specific columns from the wos_df_3 DataFrame.
+﻿import pandas as pd
 
-    Parameters:
-        wos_df_3 (pd.DataFrame): The input DataFrame containing WoS data.
-
-    Returns:
-        pd.DataFrame: A DataFrame with the selected columns.
+def get_article_entity(wos_df_3: pd.DataFrame) -> pd.DataFrame:
     """
-    # Verificar duplicados en 'doi'
-    duplicados = wos_df_3.duplicated(subset=['doi'], keep='first')
-    print(f"Se encontraron {duplicados.sum()} filas duplicadas basadas en 'doi'.")
-    
-    # Eliminar duplicados (manteniendo la primera ocurrencia)
-    wos_df_3 = wos_df_3.drop_duplicates(subset=['doi'], keep='first')
+    Build the Article dataframe from wos_df_3.
+    Deduplicate only rows that have a valid DOI; keep rows without DOI intact.
+
+    Parameters
+    ----------
+    wos_df_3 : pd.DataFrame
+        Input WoS dataframe after merges/enrichment.
+
+    Returns
+    -------
+    pd.DataFrame
+        Article dataframe with selected columns.
+    """
+    # Deduplicate by DOI only for rows with a valid DOI
+    if 'doi' in wos_df_3.columns:
+        mask_valid_doi = (
+            wos_df_3['doi'].notna()
+            & (wos_df_3['doi'].astype(str).str.strip() != '')
+            & (wos_df_3['doi'].astype(str).str.strip() != '-')
+        )
+        with_doi = wos_df_3[mask_valid_doi].copy()
+        without_doi = wos_df_3[~mask_valid_doi].copy()
+        duplicados = with_doi.duplicated(subset=['doi'], keep='first')
+        print(f"Se encontraron {int(duplicados.sum())} filas duplicadas basadas en 'doi' (solo con DOI válido).")
+        with_doi = with_doi.drop_duplicates(subset=['doi'], keep='first')
+        wos_df_3 = pd.concat([with_doi, without_doi], ignore_index=True)
 
     columns_to_select = [
         'SR',  # article_id
@@ -29,6 +42,7 @@ def get_article_entity(wos_df_3):
         'language',
         'journal',
         'source_title',
+        'country',
         'doi',
         'page_start',
         'page_end',
@@ -48,4 +62,5 @@ def get_article_entity(wos_df_3):
         'usage_count_since_2013',
         'accession_number'
     ]
-    return wos_df_3[columns_to_select]
+    existing = [c for c in columns_to_select if c in wos_df_3.columns]
+    return wos_df_3[existing]
