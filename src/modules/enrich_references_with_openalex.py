@@ -3,6 +3,7 @@ import pandas as pd
 import time
 import unicodedata
 
+from requests.exceptions import ConnectionError, Timeout, HTTPError 
 def reconstruct_abstract(abstract_inverted_index):
     if not isinstance(abstract_inverted_index, dict):  # Verifica si es un diccionario
         return ""  # Devuelve un string vacío si no es válido
@@ -24,6 +25,7 @@ def _to_upper_ascii(text: str) -> str:
 def get_paper_info_from_doi(doi, sr_ref=None, cr_ref=None, source_title=None, year=None, authors=None):
     """
     Obtiene información detallada de un DOI usando la API de OpenAlex.
+    Incluye bucle de reintento y pausa por problemas de ConnectionError.
     
     Args:
         doi (str): DOI del documento
@@ -62,17 +64,58 @@ def get_paper_info_from_doi(doi, sr_ref=None, cr_ref=None, source_title=None, ye
             orcids.append(author_orcid)
             author_ids.append(author_id if author_id else "")
             
-            # Recolectar afiliaciones
-            author_affiliations = [
-                aff.get("display_name", "N/A") 
-                for aff in auth.get("institutions", [])
-            ]
-            affiliations.append("; ".join(author_affiliations))
-        
-        # Extracción de keywords
-        keywords_list = data.get("keywords", [])
-        keywords = [keyword.get("display_name", "") for keyword in keywords_list]
-        keywords_str = "; ".join(filter(None, keywords)) if keywords else "N/A"
+            # Preparar lista de autores y ORCIDs
+            author_full_names = []
+            orcids = []
+            affiliations = []
+            
+            authorships = data.get("authorships", [])
+            for auth in authorships:
+                author_data = auth.get("author", {})
+                author_name = author_data.get("display_name", "N/A")
+                author_orcid = author_data.get("orcid", "N/A")
+                
+                # Recolectar información de autores
+                author_full_names.append(author_name)
+                orcids.append(author_orcid)
+                
+                # Recolectar afiliaciones
+                author_affiliations = [
+                    aff.get("display_name", "N/A") 
+                    for aff in auth.get("institutions", [])
+                ]
+                affiliations.append("; ".join(author_affiliations))
+            
+            # Extracción de keywords
+            keywords_list = data.get("keywords", [])
+            keywords = [keyword.get("display_name", "") for keyword in keywords_list]
+            keywords_str = "; ".join(filter(None, keywords)) if keywords else "N/A"
+            
+            # Información bibliográfica
+            bibliographic_info = data.get("biblio", {})
+            orcids = ["NO ORCID" if not orcid else orcid for orcid in orcids]
+            
+            return {
+                #"authors": "; ".join(filter(None, authors)),  # Filtra valores None
+                "authors": authors,
+                "doi": doi,
+                "SR_ref": sr_ref,
+                "CR_ref": cr_ref,
+                "year": year,
+                "source_title": source_title,
+                "author_full_names": "; ".join(filter(None, author_full_names)),
+                "journal": source.get("display_name", "N/A"),
+                "year_openalex": publication_year,
+                "abstract": data.get("abstract_inverted_index", "N/A"),
+                "title": title,
+                "volume": bibliographic_info.get("volume", "N/A"),
+                "issue": bibliographic_info.get("issue", "N/A"),
+                "page": f"{bibliographic_info.get('first_page', 'N/A')}-{bibliographic_info.get('last_page', 'N/A')}",
+                "journal_issue_number": bibliographic_info.get("issue", "N/A"),
+                "orcid": "; ".join(filter(None, orcids)),
+                "affiliations": "; ".join(filter(None, affiliations)),
+                "keywords": keywords_str,
+            }
         
         # Información bibliográfica
         bibliographic_info = data.get("biblio", {})

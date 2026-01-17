@@ -1,95 +1,64 @@
 import pandas as pd
 import networkx as nx
 
-def graph_to_df(G):
+def graph_to_df(G, df_article=None):
     """
-    Convierte un grafo NetworkX en:
-      - df_nodos: tabla con todos los atributos de cada nodo (formato Gephi)
-      - df_aristas: tabla con todos los atributos de cada arista (formato Gephi)
-      - df_tos: Id y tos de cada nodo
-    Listo para exportar a CSV y cargar en Gephi.
+    Convierte un grafo NetworkX en DataFrames y opcionalmente agrega title y author al df_nodos.
+    
+    Parámetros:
+        G (networkx.Graph): Grafo de NetworkX
+        df_article (pd.DataFrame, opcional): DataFrame con datos de artículos 
+            que debe contener columnas ['SR', 'title', 'author']
+    
+    Retorna:
+        tuple: (df_nodos, df_aristas, df_tos)
     """
-    # --------- DataFrame de nodos (formato Gephi) ---------
+    # --------- Calcular degree de cada nodo ---------
+    degree_dict = dict(G.degree())
+
+    # --------- DataFrame de nodos ---------
     nodos_data = []
     for node, attrs in G.nodes(data=True):
-        nodo_info = {"Id": node, "Label": str(node)}  # Gephi necesita Id y Label
-        nodo_info.update(attrs)  # Agregar todos los atributos del nodo
+        nodo_info = {
+            "id": node,
+            "Label": str(node),
+            "Subfield": attrs.get("branch"),
+            "tos": attrs.get("tos"),
+            "degree": degree_dict.get(node, 0)
+        }
         nodos_data.append(nodo_info)
     df_nodos = pd.DataFrame(nodos_data)
 
-    # --------- DataFrame de aristas (formato Gephi) ---------
+    # --------- DataFrame de aristas ---------
     aristas_data = []
-    for source, target, attrs in G.edges(data=True):
-        arista_info = {"Source": source, "Target": target}
-        arista_info.update(attrs)  # Agregar todos los atributos de la arista
-        aristas_data.append(arista_info)
+    for u, v, attrs in G.edges(data=True):
+        aristas_data.append({
+            "Source": u,
+            "Target": v,
+            "weight": attrs.get('weight', 1)
+        })
+    
     df_aristas = pd.DataFrame(aristas_data)
-
+    
     # --------- DataFrame de Id y tos ---------
-    df_tos = df_nodos[["Id", "tos"]].copy()
-    df_tos.rename(columns={"Id": "SR"}, inplace=True)
+    df_tos = df_nodos[["id", "tos"]].copy()
+    df_tos.rename(columns={"id": "SR"}, inplace=True)
 
-
+    # --------- AGREGAR TITLE Y AUTHOR AL df_nodos ---------
+    if df_article is not None:
+        # Verificar que df_article tiene las columnas necesarias
+        if all(col in df_article.columns for col in ['SR', 'title', 'author']):
+            # Hacer merge solo con las columnas needed
+            df_nodos = pd.merge(
+                df_nodos,
+                df_article[['SR', 'title', 'author']],
+                left_on='id',
+                right_on='SR',
+                how='left'
+            )
+            # Eliminar la columna SR duplicada
+            df_nodos = df_nodos.drop('SR', axis=1)
+        else:
+            print("Advertencia: df_article no tiene las columnas 'SR', 'title' y 'author'")
 
     return df_nodos, df_aristas, df_tos
-
-
-
-
-
-
-
-
-
-# def graph_to_df(G):
-#     """
-#     Convierte un grafo en dos DataFrames: nodos y aristas.
-#     Retorna: (df_nodos, df_aristas)
-#     """
-#     # DataFrame de nodos
-#     nodos_data = []
-#     for node, attrs in G.nodes(data=True):
-#         fila = {"node": node}
-#         fila.update(attrs)  # agrega todos los atributos del nodo
-#         nodos_data.append(fila)
-#     df_nodos = pd.DataFrame(nodos_data)
-
-#     # DataFrame de aristas
-#     aristas_data = []
-#     for source, target, attrs in G.edges(data=True):
-#         fila = {"source": source, "target": target}
-#         fila.update(attrs)  # agrega todos los atributos de la arista
-#         aristas_data.append(fila)
-#     df_aristas = pd.DataFrame(aristas_data)
-
-#     return df_nodos, df_aristas
-
-
-# Ejemplo de uso
-# df_nodos, df_aristas = graph_to_dfs(G)
-
-# print("NODOS:")
-# print(df_nodos.head())
-
-# print("\nARISTAS:")
-# print(df_aristas.head())
-
-# def graph_to_df(G):
-#     """
-#     Convierte un grafo con atributos en un DataFrame con columnas:
-#     ['node', 'tos', 'root', 'trunk', 'branch']
-#     """
-#     data = []
-#     for node, attrs in G.nodes(data=True):
-#         data.append({
-#             "node": node,  # identificador o nombre del nodo
-#             "tos": attrs.get("tos"),
-#             "root": attrs.get("root", 0),
-#             "trunk": attrs.get("trunk", 0),
-#             "branch": attrs.get("branch", None)
-#         })
-#     return pd.DataFrame(data)
-
-# # Ejemplo de uso
-# df_nodos = graph_to_df(G)
-# print(df_nodos.head())
