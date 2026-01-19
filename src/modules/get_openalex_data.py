@@ -4,7 +4,7 @@ import pandas as pd
 import time
 from typing import List, Optional, Dict, Any
 
-# Utilidad para reconstruir resumen a partir de abstract_inverted_index
+# Utility to reconstruct abstract from abstract_inverted_index
 
 def reconstruct_abstract(abstract_inverted_index: Dict[str, List[int]]) -> str:
     if not isinstance(abstract_inverted_index, dict):
@@ -15,7 +15,7 @@ def reconstruct_abstract(abstract_inverted_index: Dict[str, List[int]]) -> str:
             abstract[pos] = word
     return ' '.join(abstract[i] for i in sorted(abstract))
 
-# --- 1) Generar la columna 'referencias_citadas' ---
+# --- 1) Generate the 'cited_references' column ---
 
 def get_openalex_references(doi: str) -> List[str]:
     clean = doi.replace('https://doi.org/', '').strip() or None
@@ -29,136 +29,135 @@ def get_openalex_references(doi: str) -> List[str]:
             refs = data.get("referenced_works", [])
             return [f"https://openalex.org/{r.split('/')[-1]}" for r in refs if r]
         except (ConnectionError, Timeout) as e:
-            print(f"❌ Conexión perdida/Timeout para DOI {doi}. Intentando reconexión...")
+            print(f"❌ Connection lost/Timeout for DOI {doi}. Attempting reconnection...")
 
-            # Bucle interno de pausa y verificación de conexión
+            # Internal loop for pause and connection check
             while True:
                 PAUSE_TIME = 15
-                print(f"   Pausando por {PAUSE_TIME} segundos.")
+                print(f"   Pausing for {PAUSE_TIME} seconds.")
                 time.sleep(PAUSE_TIME)
             
                 try:
-                    # Intento ligero de ping a un sitio confiable para verificar la red
+                    # Light ping attempt to a reliable site to check the network
                     requests.get("https://1.1.1.1", timeout=10) 
-                    print("✅ Conexión reestablecida. Reintentando la solicitud a OpenAlex...")
-                    break # Sale del bucle de pausa y vuelve a intentar la solicitud principal
+                    print("✅ Connection reestablished. Retrying the request to OpenAlex...")
+                    break # Exit the pause loop and retry the main request
                 except (ConnectionError, Timeout):
-                    print("❌ Conexión aún inestable. Volviendo a pausar.")
+                    print("❌ Connection still unstable. Pausing again.")
 
         except HTTPError as e:
             status_code = e.response.status_code
             
             if status_code == 404:
-                print(f"DOI no encontrado (404): {doi}. Se salta.")
-                return [] # Devuelve lista vacía 
+                print(f"DOI not found (404): {doi}. Skipping.")
+                return [] # Return empty list 
             
             elif status_code == 429:
-                print(f"Límite de tasa (429) alcanzado. Pausando por 30 segundos...")
+                print(f"Rate limit (429) reached. Pausing for 30 seconds...")
                 time.sleep(30)
-                continue # Reintenta
+                continue # Retry
             
             else:
-                print(f"   🛑 Error HTTP inesperado ({status_code}) para {doi}. Se salta.")
-                return [] # Devuelve lista vacía 
+                print(f"   🛑 Unexpected HTTP error ({status_code}) for {doi}. Skipping.")
+                return [] # Return empty list 
         
         except RequestException as e:
-            print(f"❌ Error desconocido de Request para {doi}: {e}")
-            return [] # Devuelve lista vacía
+            print(f"❌ Unknown Request error for {doi}: {e}")
+            return [] # Return empty list
 
         except Exception as e:
-            print(f"   🛑 Error general inesperado para {doi}: {e}")
-            return [] # Devuelve lista vacía
+            print(f"   🛑 Unexpected general error for {doi}: {e}")
+            return [] # Return empty list
 
 
 def generate_references_column(df: pd.DataFrame, doi_col: str = 'doi') -> pd.DataFrame:
     """
-    Genera la columna 'referencias_citadas' manteniendo solo 'SR' y las referencias
-    
+    Generates the 'cited_references' column while keeping only 'SR' and the references.
+
     Args:
-        df: DataFrame que debe contener 'doi' y 'SR'
-        doi_col: Nombre de la columna con los DOIs
-        
+        df: DataFrame that must contain 'doi' and 'SR'
+        doi_col: Name of the column containing the DOIs
+
     Returns:
-        DataFrame con solo las columnas 'SR' y 'referencias_citadas'
+        DataFrame with only the 'SR' and 'cited_references' columns
     """
-    # Verificar columnas requeridas
+    # Verify required columns
     required_cols = {'SR', doi_col}
     missing = required_cols - set(df.columns)
     if missing:
-        raise ValueError(f"Faltan columnas requeridas: {missing}")
+        raise ValueError(f"Missing required columns: {missing}")
     
-    # Generar las referencias
+    # Generate references
     refs_list = []
     for i, doi in enumerate(df[doi_col].fillna('')):
         if not doi.strip():
             refs_list.append([])
         else:
             refs_list.append(get_openalex_references(doi))
-        time.sleep(0.5)  # Respeta el rate limit de la API
+        time.sleep(0.5)  # Respect the API rate limit
     
-    # Crear nuevo DataFrame con solo las columnas necesarias
+    # Create new DataFrame with only the necessary columns
     result_df = pd.DataFrame({
         'SR': df['SR'],
         doi_col: df[doi_col],
-        'referencias_citadas': refs_list
+        'cited_references': refs_list
     })
     
     return result_df
 
-# --- 2) Fetch y extracción de metadata de cada referencia ---
-
+# --- 2) Fetch and extract metadata for each reference ---
 def fetch_openalex_work(work_id: str) -> Optional[Dict[str, Any]]:
     while True:
         try:
-            #Time out para evitar que la petición quede colgada
+            # Timeout to prevent the request from hanging
             r = requests.get(f"https://api.openalex.org/works/{work_id}", timeout=60)
             r.raise_for_status()
             return r.json()
-        # Manejo de error de conexión
+        # Connection error handling
         except (ConnectionError, Timeout) as e:
-            print(f"❌ Conexión perdida/Timeout para Work ID {work_id}. Intentando reconexión...")
+            print(f"❌ Connection lost/Timeout for Work ID {work_id}. Attempting reconnection...")
             
-            # Bucle interno de pausa y verificación de conexión
+            # Internal loop for pause and connection check
             while True:
                 PAUSE_TIME = 15
-                print(f"   Pausando por {PAUSE_TIME} segundos.")
+                print(f"   Pausing for {PAUSE_TIME} seconds.")
                 time.sleep(PAUSE_TIME)
                 
                 try:
-                    # Intento ligero de ping a un sitio confiable para verificar la red
+                    # Light ping attempt to a reliable site to check the network
                     requests.get("https://1.1.1.1", timeout=10) 
-                    print("✅ Conexión reestablecida. Reintentando la solicitud a OpenAlex...")
-                    break # Sale del bucle de pausa y vuelve a intentar la solicitud principal
+                    print("✅ Connection reestablished. Retrying the request to OpenAlex...")
+                    break # Exit the pause loop and retry the main request
                 except (ConnectionError, Timeout):
-                    print("❌ Conexión aún inestable. Volviendo a pausar.")
-        # Manejo de errores HTTP 
+                    print("❌ Connection still unstable. Pausing again.")
+        # HTTP error handling
         except HTTPError as e:
             status_code = e.response.status_code
             
             if status_code == 404:
-                # El recurso no existe (No es un error de conexión, no se reintenta)
-                print(f"Work ID no encontrado (404): {work_id}. Se salta.")
+                # Resource does not exist (Not a connection error, no retry)
+                print(f"Work ID not found (404): {work_id}. Skipping.")
                 return None 
             
             elif status_code == 429:
-                # Límite de tasa alcanzado (Se espera y se reintenta)
-                print(f"Límite de tasa (429) alcanzado. Pausando por 30 segundos...")
+                # Rate limit reached (Wait and retry)
+                print(f"Rate limit (429) reached. Pausing for 30 seconds...")
                 time.sleep(30)
-                continue # Vuelve al inicio del bucle while True para reintentar el mismo work_id
+                continue # Return to the beginning of the while True loop to retry the same work_id
 
             else:
-                # Otros errores HTTP (ej. 5xx del servidor OpenAlex)
-                print(f"Error HTTP inesperado ({status_code}) para {work_id}. Se salta.")
+                # Other HTTP errors (e.g., 5xx from OpenAlex server)
+                print(f"Unexpected HTTP error ({status_code}) for {work_id}. Skipping.")
                 return None
 
-        # Manejo de cualquier otra excepción de Requests
+        # Handling any other Requests exceptions
         except RequestException as e:
-            print(f"Error desconocido de Request para {work_id}: {e}")
+            print(f"Unknown Request error for {work_id}: {e}")
             return None
         
-        # Manejo de cualquier otra excepción general
+        # Handling any other general exceptions
         except Exception as e:
-            print(f"Error general inesperado para {work_id}: {e}")
+            print(f"Unexpected general error for {work_id}: {e}")
             return None
         
 
@@ -180,7 +179,7 @@ def extract_work_info(w: Dict[str, Any]) -> Dict[str, Any]:
             'authors_with_affiliations': None,
             'orcids': None,
             'cited_by': None,
-            'keywords': None  # 🔹 Añadido
+            'keywords': None  # Added
         }
 
     doi_raw = w.get('doi')
@@ -188,11 +187,11 @@ def extract_work_info(w: Dict[str, Any]) -> Dict[str, Any]:
     primary_location = w.get('primary_location') or {}
     source = primary_location.get('source') or {}
     
-    # Reconstrucción de abstract
+    # Reconstruction of abstract
     inverted = w.get('abstract_inverted_index')
     abstract_text = reconstruct_abstract(inverted) if inverted else None
 
-    # --- Autores ---
+    # --- Authors ---
     auths, orcids, authors_with_affiliations = [], [], []
     for a in w.get('authorships', []) or []:
         author = a.get('author') or {}
@@ -248,15 +247,15 @@ def extract_work_info(w: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def openalex_enrich_ref(df: pd.DataFrame, exclude_books: bool = True, audit_dropped_path: Optional[str] = None) -> pd.DataFrame:
-    if 'referencias_citadas' not in df.columns:
-        raise ValueError("Falta la columna 'referencias_citadas'. Ejecuta generate_references_column primero.")
+    if 'cited_references' not in df.columns:
+        raise ValueError("Missing 'cited_references' column. Run generate_references_column first.")
     
     rows = []
     dropped = []
     for _, row in df.iterrows():
         sr = row.get('SR')
         doi0 = row.get('doi')
-        refs = row['referencias_citadas']
+        refs = row['cited_references']
         
         if isinstance(refs, str):
             try:
@@ -340,24 +339,8 @@ def openalex_enrich_ref(df: pd.DataFrame, exclude_books: bool = True, audit_drop
 
 
 
-# Ejemplo de uso con datos que incluyen SR
-data = {
-    'doi': [
-        '10.1108/QMR-04-2015-0029',
-        '10.1080/0965254X.2015.1035036',
-        '10.1108/14626001011088705'
-    ],
-    'SR': [
-        'Author1 (2015) QMR Article',
-        'Author2 (2015) Marketing Paper',
-        'Author3 (2010) Business Research'
-    ]
-}
-
-
-
 # ##################################
-# Función para llenar 'source_title' desde scimago
+# Function to fill 'source_title' from scimago
 # ##################################
 
 
@@ -365,9 +348,9 @@ from rapidfuzz import process, fuzz
 
 def fill_source_title_from_scimago(df: pd.DataFrame, scimago: pd.DataFrame, cutoff=95) -> pd.DataFrame:
     """
-    Rellena 'source_title' en df usando coincidencia aproximada con scimago, usando rapidfuzz.
+    Fill 'source_title' in df using approximate matching with scimago, using rapidfuzz.
     """
-    # Preprocesar
+    # Preprocess
     scimago['Title_clean'] = scimago['Title'].str.upper().str.strip()
     title_to_abbr = dict(zip(scimago['Title_clean'], scimago['journal_abbr']))
 
@@ -386,10 +369,8 @@ def fill_source_title_from_scimago(df: pd.DataFrame, scimago: pd.DataFrame, cuto
 
 
 
-
-
 # ##################################
-# Función para generar SR
+# Function to generate SR
 # ##################################
 
 import pandas as pd
@@ -409,14 +390,14 @@ def generate_SR_ref(df: pd.DataFrame) -> pd.DataFrame:
         if pd.isna(author_str) or not str(author_str).strip():
             return ''
         first_author = str(author_str).split(';')[0].strip()
-        # Eliminar contenido entre paréntesis (como ORCIDs)
+        # Remove content within parentheses (like ORCIDs)
         first_author = re.sub(r'\(.*?\)', '', first_author).strip()
-        # Normalizar espacios
+        # Normalize spaces
         first_author = re.sub(r'[,\s]+', ' ', first_author).strip()
-        # Dividir en partes
+        # Split into parts
         parts = first_author.split()
 
-        # Eliminar guiones aislados que queden como parte del nombre
+        # Remove isolated hyphens that remain as part of the name
         parts = [p for p in parts if p != '-']
 
         if len(parts) >= 2:
