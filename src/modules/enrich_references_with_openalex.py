@@ -159,29 +159,29 @@ def get_paper_info_from_doi(doi, sr_ref=None, cr_ref=None, source_title=None, ye
 
 def enrich_references_with_openalex(df):
     """
-    Enriquece un DataFrame de referencias con información de OpenAlex.
-    
-    Args:
-        df (pd.DataFrame): DataFrame con DOIs en la columna 'doi' y 'SR_ref'
-    
-    Returns:
-        pd.DataFrame: DataFrame con información enriquecida de los documentos
+        Enriches a references DataFrame with information from OpenAlex.
+
+        Args:
+            df (pd.DataFrame): DataFrame containing DOIs in the 'doi' column and 'SR_ref'
+
+        Returns:
+            pd.DataFrame: DataFrame with enriched document information
     """
     results = []
     
     for index, row in df.iterrows():
-        # Verifica si tiene un DOI
+        # Checks whether it has a DOI
         if 'doi' not in row or pd.isna(row['doi']) or row['doi'] == '' or row['doi'] == '-':
-            # print(f"Fila {index}: DOI no encontrado o vacío, saltando...")
-            results.append(row.to_dict())  # Convierte la fila a diccionario y la agrega
+            # print(f"Row {index}: DOI not found or empty, skipping...")
+            results.append(row.to_dict())  # Converts the row to a dictionary and adds it
             continue
             
         doi = row['doi']
-        sr_ref = row['SR_ref']  # Usar la columna SR_ref existente
-        cr_ref = row['CR_ref']  # Usar la columna CR_ref existente
-        source_title = row['source_title']  # Usar la columna source_title existente
-        year = row['year']  # Usar la columna year existente
-        authors = row['authors']  # Usar la columna authors existente
+        sr_ref = row['SR_ref']  # Use the existing SR_ref column
+        cr_ref = row['CR_ref']  # Use the existing CR_ref column
+        source_title = row['source_title']  # Use the existing source_title column
+        year = row['year']  # Use the existing year column
+        authors = row['authors']  # Use the existing authors column
 
         try:
             paper_info = get_paper_info_from_doi(doi, sr_ref, cr_ref, source_title, year, authors)
@@ -189,16 +189,16 @@ def enrich_references_with_openalex(df):
             if paper_info:
                 results.append(paper_info)
             
-            # Para evitar sobrecargar la API
+            # To avoid overloading the API
             time.sleep(0.5)
         
         except Exception as e:
-            print(f"Error procesando DOI {doi}: {e}")
+            print(f"Error processing DOI {doi}: {e}")
     
     enrich_references = pd.DataFrame(results)
     enrich_references['abstract'] = enrich_references['abstract'].apply(reconstruct_abstract)
     
-    # Reordenar columnas (incluyendo keywords)
+    # Reorder columns (including keywords)
     column_order = [
         'doi', 'SR_ref', 'CR_ref',
         'authors', 'author_full_names', 'orcid', 'affiliation_2',
@@ -210,8 +210,8 @@ def enrich_references_with_openalex(df):
     enrich_references = enrich_references[column_order]
     return enrich_references
 
-# Ejemplo de uso:
+# Example usage:
 # import pandas as pd
-# df = pd.read_csv('referencias.csv')
-# resultado = enrich_references_with_openalex(df)
-# resultado.to_csv('referencias_enriquecidas.csv', index=False)
+# df = pd.read_csv('references.csv')
+# result = enrich_references_with_openalex(df)
+# result.to_csv('enriched_references.csv', index=False)
