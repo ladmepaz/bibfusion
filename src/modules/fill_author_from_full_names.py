@@ -3,67 +3,67 @@ import pandas as pd
 
 def fill_author_from_full_names(df):
     """
-    Rellena la columna 'author' usando 'author_full_names'
-    cuando 'author' está vacío o es NaN.
-    Convierte nombres completos al formato: APELLIDO Iniciales.
+    Fills the 'author' column using 'author_full_names'
+    when 'author' is empty or NaN.
+    Converts full names to the format: LASTNAME Initials.
     """
 
-    def convertir_a_formato_author(nombre_completo):
-        # Validación básica
-        if not isinstance(nombre_completo, str):
+    def convert_to_author_format(full_name):
+        # Basic validation
+        if not isinstance(full_name, str):
             return ''
 
-        nombre_completo = nombre_completo.strip()
-        if nombre_completo == '':
+        full_name = full_name.strip()
+        if full_name == '':
             return ''
 
-        partes = nombre_completo.split()
+        parts = full_name.split()
 
-        # Caso: solo una palabra
-        if len(partes) == 1:
-            return partes[0].upper()
+        # Case: single word
+        if len(parts) == 1:
+            return parts[0].upper()
 
-        # Apellido = última palabra
-        apellido = partes[-1].upper()
+        # Last name = last word
+        last_name = parts[-1].upper()
 
-        # Iniciales de los nombres
-        iniciales = ''.join(
+        # Initials of the names
+        initials = ''.join(
             p[0].upper() + '.'
-            for p in partes[:-1]
+            for p in parts[:-1]
             if p
         )
 
-        return f"{apellido} {iniciales}".strip()
+        return f"{last_name} {initials}".strip()
 
-    def generar_author(row):
-        # Solo completar si 'author' está vacío o NaN
+    def generate_author(row):
+        # Only fill if 'author' is empty or NaN
         if pd.isna(row['author']) or str(row['author']).strip() == '':
             if pd.notna(row['author_full_names']):
-                # Separar autores y eliminar entradas vacías
-                nombres = [
+                # Separate authors and remove empty entries
+                name = [
                     n.strip()
                     for n in str(row['author_full_names']).split(';')
                     if n.strip() != ''
                 ]
 
-                if not nombres:
+                if not name:
                     return row['author']
 
-                autores_convertidos = [
-                    convertir_a_formato_author(nombre)
-                    for nombre in nombres
+                converted_authors = [
+                    convert_to_author_format(name)
+                    for name in name
                 ]
 
-                # Eliminar posibles resultados vacíos
-                autores_convertidos = [
-                    a for a in autores_convertidos if a != ''
+                # Remove possible empty results
+                converted_authors = [
+                    a for a in converted_authors if a != ''
                 ]
 
-                if autores_convertidos:
-                    return '; '.join(autores_convertidos)
+                if converted_authors:
+                    return '; '.join(converted_authors)
 
-        # Si ya existe 'author', se respeta
+        # If 'author' already exists, keep it
         return row['author']
 
-    df['author'] = df.apply(generar_author, axis=1)
+    df['author'] = df.apply(generate_author, axis=1)
     return df
