@@ -324,12 +324,12 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
 
     # Assign ORCID IDs to authors
     def split_orcid_field(orcid_field):
-        # Divide por punto y coma, y remueve espacios
+        # Split by semicolon and remove spaces
         return [entry.strip() for entry in orcid_field.split(';') if entry.strip()]
 
     def extract_orcid_mapping(orcid_field):
         """
-        Devuelve una lista con ORCID por autor en orden. Si un autor no tiene ORCID, se coloca ''.
+        Returns a list with ORCID per author in order. If an author does not have an ORCID, '' is placed.
         """
         entries = split_orcid_field(orcid_field)
         result = []
@@ -343,7 +343,7 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
             else:
                 result.append('')  # No ORCID
         return result
-    # Asignar ORCID a cada autor individualmente
+    # Assign ORCID to each individual author
     def assign_orcid(row):
         orcid_list = extract_orcid_mapping(row['orcid'])
         index = row['AuthorOrder'] - 1
@@ -498,41 +498,41 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
     # Paso 16 modificado: Extraer emails
     def parse_emails(em_entry):
         """
-        Parsea la entrada 'email_address' para extraer una lista de emails.
+        Parse the input 'email_address' to extract a list of emails.
         """
         if not isinstance(em_entry, str) or not em_entry.strip():
             return []
-        # Reemplazar puntos y comas dobles con punto y coma simple
+        # Replace double semicolons with single semicolon
         em_entry = em_entry.replace(';;', ';')
-        # Dividir emails por punto y coma
+        # Split emails by semicolon
         emails = [email.strip() for email in em_entry.split(';') if email.strip()]
         return emails
 
-    # Crear un diccionario de emails por SR
+    # Create a dictionary of emails by SR
     sr_emails_dict = {}
     for idx, row in wos_authors.iterrows():
         sr = row['SR']
         emails = parse_emails(row['email_address'])
         sr_emails_dict[sr] = emails
 
-    # Función para asignar emails a autores
+    # Function to assign emails to authors
     def assign_emails_improved(group_df):
         """
-        Asigna emails a autores de un mismo artículo (SR) de forma más efectiva.
+        Assign emails to authors of the same article (SR) more effectively.
         """
         sr = group_df['SR'].iloc[0]
         emails = sr_emails_dict.get(sr, [])
         result_emails = []
         
-        # Si no hay emails, retornar lista vacía para todos los autores
+        # If there are no emails, return an empty list for all authors
         if not emails:
             return [''] * len(group_df)
         
-        # Caso 1: Si tenemos exactamente el mismo número de emails que de autores, asignar en orden
+        # Case 1: If we have exactly the same number of emails as authors, assign in order
         if len(emails) == len(group_df):
             return emails
         
-        # Caso 2: Intentar hacer coincidir emails con nombres de autores
+        # Case 2: Try to match emails with author names
         assigned_emails = [''] * len(group_df)
         available_emails = emails.copy()
         
@@ -540,7 +540,7 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
             author_full_name = author_row['AuthorFullName'].lower() if isinstance(author_row['AuthorFullName'], str) else ""
             author_name = author_row['AuthorName'].lower() if isinstance(author_row['AuthorName'], str) else ""
             
-            # Dividir nombre del autor en partes
+            # Split author name into parts
             last_name = ""
             first_name = ""
             
@@ -555,25 +555,25 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
                 last_name = name_parts[0] if name_parts else ""
                 first_name = name_parts[1] if len(name_parts) > 1 else ""
             
-            # Buscar coincidencias entre el email y el nombre del autor
+            # Search for matches between the email and the author's name
             best_match = None
             best_score = 0
             
             for email in available_emails:
                 email_username = email.split('@')[0].lower()
                 
-                # Calcular puntuación de coincidencia
+                # Calculate match score
                 score = 0
                 
-                # Comprobar si el apellido está en el nombre de usuario del email
+                # Check if the last name is in the email username
                 if last_name and last_name in email_username:
                     score += 3
                 
-                # Comprobar si la inicial del nombre está en el nombre de usuario del email
+                # Check if the first name initial is in the email username
                 if first_name and first_name[0] in email_username:
                     score += 2
                 
-                # Comprobar si hay más partes del nombre en el email
+                # Check if there are more parts of the name in the email username
                 for part in author_full_name.replace(',', ' ').split():
                     if len(part) > 2 and part.lower() in email_username:
                         score += 1
@@ -582,14 +582,14 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
                     best_score = score
                     best_match = email
             
-            # Asignar el mejor email encontrado
+            # Assign the best email found
             if best_score > 0 and best_match:
                 assigned_emails[i] = best_match
-                # Eliminar el email asignado de la lista para evitar duplicados
+                # Remove the assigned email from the list to avoid duplicates
                 if best_match in available_emails:
                     available_emails.remove(best_match)
         
-        # Si quedan emails sin asignar y autores sin email, asignarlos secuencialmente
+        # If there are remaining emails and authors without email, assign them sequentially
         empty_indices = [i for i, email in enumerate(assigned_emails) if not email]
         for i in empty_indices:
             if available_emails:
@@ -597,7 +597,7 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
         
         return assigned_emails
 
-    # Aplicar asignación de emails por grupos
+    # Apply email assignment by groups
     email_assignments = {}
     for sr, group in authors_df.groupby('SR'):
         emails = assign_emails_improved(group)
@@ -607,13 +607,13 @@ def get_wos_author_data(wos_df_3: pd.DataFrame) -> pd.DataFrame:
             else:
                 email_assignments[idx] = ''
 
-    # Asignar emails al DataFrame
+    # Assign emails to the DataFrame
     authors_df['Email'] = authors_df.index.map(lambda idx: email_assignments.get(idx, ''))
 
         
     
     
-    #Código original
+    # Original code
     # Apply 'assign_emails' to each row
     #authors_df['Email'] = authors_df.apply(assign_emails_improved)), axis=1)
 

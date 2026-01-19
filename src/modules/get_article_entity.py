@@ -25,7 +25,7 @@ def get_article_entity(wos_df_3: pd.DataFrame) -> pd.DataFrame:
         with_doi = wos_df_3[mask_valid_doi].copy()
         without_doi = wos_df_3[~mask_valid_doi].copy()
         duplicados = with_doi.duplicated(subset=['doi'], keep='first')
-        print(f"Se encontraron {int(duplicados.sum())} filas duplicadas basadas en 'doi' (solo con DOI válido).")
+        print(f"{int(duplicados.sum())} duplicate rows found based on 'doi' (only with valid DOI).")
         with_doi = with_doi.drop_duplicates(subset=['doi'], keep='first')
         wos_df_3 = pd.concat([with_doi, without_doi], ignore_index=True)
 

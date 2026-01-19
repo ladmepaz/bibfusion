@@ -4,84 +4,85 @@ import re
 
 def get_scopus_author_data(df_original: pd.DataFrame) -> pd.DataFrame:
     """
-    Construye Author.csv a partir del DataFrame de artículos de Scopus (mains + refs).
-    Conserva:
-      - AuthorID (Scopus) alineado por orden de autor cuando existe.
-      - Orcid (normalizado si viene como URL).
-      - OpenAlexAuthorID / openalex_work_id si están en df_original (se alinean por AuthorOrder).
+        Builds Author.csv from the Scopus articles DataFrame (mains + refs).
+        Preserves:
+            - AuthorID (Scopus), aligned by author order when available.
+            - ORCID (normalized when provided as a URL).
+            - OpenAlexAuthorID / openalex_work_id if present in df_original (aligned by AuthorOrder).
     """
+
     datos_autores = []
 
     for _, row in df_original.iterrows():
         sr = row.get('SR')
 
-        # Lista de autores (texto)
+        # List of authors (text)
         if pd.notna(row.get('author')):
             autores = str(row['author']).split('; ')
         else:
             continue
 
-        # Lista de AuthorID (Scopus), separados por ';'
+        # List of AuthorID (Scopus), separated by ';'
         author_ids = []
         if 'authors_id' in row and pd.notna(row['authors_id']):
             author_ids = [aid.strip() for aid in str(row['authors_id']).split(';') if str(aid).strip()]
 
-        # ORCID: extrae sólo el ID si viene como URL
+        # ORCID: extract only the ID if provided as a URL
         orcids = []
         if pd.notna(row.get('orcid')):
             orcid_matches = re.findall(r'https?://orcid\.org/(\d{4}-\d{4}-\d{4}-\d{3}[\dX])',
                                        str(row['orcid']).lower())
             orcids = [m.upper() for m in orcid_matches]
 
-        # Nombres completos
+        # Full names
         autores_full = []
         if pd.notna(row.get('author_full_names')):
-            for autor in str(row['author_full_names']).split(';'):
-                autor = autor.strip()
-                m = re.search(r'([^(]+)\s*\(\d+\)', autor)
-                autores_full.append(m.group(1).strip() if m else autor)
+            for author in str(row['author_full_names']).split(';'):
+                author = author.strip()
+                m = re.search(r'([^(]+)\s*\(\d+\)', author)
+                autores_full.append(m.group(1).strip() if m else author)
 
-        # Afiliaciones individuales y combinadas
-        afiliaciones = {}
+        # Individual and combined affiliations
+        affiliations = {}
         authors_with_affiliations_list = []
         if pd.notna(row.get('authors_with_affiliations')):
-            autores_afil = str(row['authors_with_affiliations']).split(';')
-            for autor_afil in autores_afil:
-                if ',' in autor_afil:
-                    partes = autor_afil.split(',', 1)
-                    nombre_autor = partes[0].strip()
-                    afiliacion = partes[1].strip() if len(partes) > 1 else 'NO AFFILIATION'
-                    afiliaciones[nombre_autor] = afiliacion
-        if afiliaciones:
-            for nombre_autor, afiliacion in afiliaciones.items():
-                nombre_partes = nombre_autor.split()
-                if len(nombre_partes) >= 2:
-                    apellido = nombre_partes[0].replace('.', '')
-                    iniciales = ' '.join([p[0] + '.' for p in nombre_partes[1:] if p])
-                    formatted_name = f"{apellido} {iniciales}".upper()
-                    authors_with_affiliations_list.append(f"{formatted_name}, {afiliacion}")
+            authors_afil = str(row['authors_with_affiliations']).split(';')
+            for author_afil in authors_afil:
+                if ',' in author_afil:
+                    parts = author_afil.split(',', 1)
+                    name_author = parts[0].strip()
+                    affiliation = parts[1].strip() if len(parts) > 1 else 'NO AFFILIATION'
+                    affiliations[name_author] = affiliation
+        if affiliations:
+            for name_author, affiliation in affiliations.items():
+                author_name_parts = name_author.split()
+                if len(author_name_parts) >= 2:
+                    last_name = author_name_parts[0].replace('.', '')
+                    initials = ' '.join([p[0] + '.' for p in author_name_parts[1:] if p])
+                    formatted_name = f"{last_name} {initials}".upper()
+                    authors_with_affiliations_list.append(f"{formatted_name}, {affiliation}")
         combined_authors_affiliations = "; ".join(authors_with_affiliations_list) if authors_with_affiliations_list else "NO AFFILIATIONS"
 
-        # ResearcherID embebido en author_full_names
+        # ResearcherID embedded in author_full_names
         researcher_ids = {}
         if pd.notna(row.get('author_full_names')):
-            for autor_full in str(row['author_full_names']).split(';'):
-                m_id = re.search(r'([^(]+)\((\d+)\)', autor_full.strip())
+            for author_full in str(row['author_full_names']).split(';'):
+                m_id = re.search(r'([^(]+)\((\d+)\)', author_full.strip())
                 if m_id:
-                    nombre = m_id.group(1).strip()
+                    name = m_id.group(1).strip()
                     researcher_id = m_id.group(2).strip()
-                    researcher_ids[nombre] = researcher_id
+                    researcher_ids[name] = researcher_id
 
-        # Crear entrada por autor
-        for i, autor in enumerate(autores):
+        # Create entry per author
+        for i, author in enumerate(autores):
             author_order = i + 1
-            author_name = autor.strip()
+            author_name = author.strip()
             author_fullname = autores_full[i] if i < len(autores_full) else ''
-            # Afiliación
+            # Affiliation
             affiliation = 'NO AFFILIATION'
-            for key in afiliaciones:
+            for key in affiliations:
                 if author_name in key or key in author_name:
-                    affiliation = afiliaciones[key]
+                    affiliation = affiliations[key]
                     break
             # ResearcherID
             researcher_id = ''
@@ -114,7 +115,7 @@ def get_scopus_author_data(df_original: pd.DataFrame) -> pd.DataFrame:
 
     df_autores = pd.DataFrame(datos_autores)
 
-    # Añadir OpenAlexAuthorID y openalex_work_id alineados por SR y AuthorOrder si existen en df_original
+    # Add OpenAlexAuthorID and openalex_work_id aligned by SR and AuthorOrder if present in df_original
     try:
         rows = []
         for _, r in df_original.iterrows():

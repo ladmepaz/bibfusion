@@ -12,19 +12,19 @@ def scopus_get_article_entity(scopus_df_3):
         pd.DataFrame: A DataFrame with the selected columns.
     """
     
-    # --- Eliminar duplicados por DOI sin borrar filas con DOI vacío ---
+    # --- Remove duplicates by DOI without deleting rows with empty DOI ---
     scopus_df_3['doi'] = scopus_df_3['doi'].astype(str).str.strip()
 
-    mask_doi_vacio = scopus_df_3['doi'].isin(["", "nan", "None", None])
-    df_con_doi = scopus_df_3[~mask_doi_vacio]
+    mask_doi_empty = scopus_df_3['doi'].isin(["", "nan", "None", None])
+    df_with_doi = scopus_df_3[~mask_doi_empty]
 
-    duplicados = df_con_doi.duplicated(subset=['doi'], keep='first')
-    print(f"Se encontraron {duplicados.sum()} filas duplicadas basadas en 'doi' (excluyendo DOIs vacíos).")
+    duplicate = df_with_doi.duplicated(subset=['doi'], keep='first')
+    print(f"Found {duplicate.sum()} duplicate rows based on 'doi' (excluding empty DOIs).")
 
-    df_con_doi = df_con_doi.drop_duplicates(subset=['doi'], keep='first')
+    df_with_doi = df_with_doi.drop_duplicates(subset=['doi'], keep='first')
 
-    # Volver a unir filas con y sin DOI
-    scopus_df_3 = pd.concat([df_con_doi, scopus_df_3[mask_doi_vacio]], ignore_index=True)
+    # Rejoin rows with and without DOI
+    scopus_df_3 = pd.concat([df_with_doi, scopus_df_3[mask_doi_empty]], ignore_index=True)
 
     columns_to_select = [
     'SR',

@@ -3,27 +3,27 @@ import pandas as pd
 
 def sort_by_tos_and_year(df):
     """
-    Ordena el DataFrame por 'tos' y luego por 'year'.
-    Orden de 'tos': root -> trunk -> branch_1 -> branch_2 -> ...
+    Sorts the DataFrame by 'tos' and then by 'year'.
+    'tos' order: root -> trunk -> branch_1 -> branch_2 -> ...
     """
     def tos_sort_key(tos_value):
         if tos_value == "root":
-            return (0, 0)  # root primero
+            return (0, 0)  # root first
         elif tos_value == "trunk":
-            return (1, 0)  # trunk después
+            return (1, 0)  # trunk second
         elif isinstance(tos_value, str) and tos_value.startswith("branch_"):
             branch_num = int(re.search(r"branch_(\d+)", tos_value).group(1))
-            return (2, branch_num)  # luego branch_n en orden numérico
+            return (2, branch_num)  # then branch_n in numerical order
         else:
-            return (3, 0)  # lo que no encaje va al final
+            return (3, 0)  # anything else goes last
     
     df_sorted = df.copy()
     df_sorted["tos_order"] = df_sorted["tos"].apply(tos_sort_key)
     
-    # Ordena primero por el criterio tos_order, luego por año
+    # Sort first by tos_order, then by year
     df_sorted = df_sorted.sort_values(by=["tos_order", "year"], ascending=[True, True])
     
-    # Quita la columna auxiliar
+    # Remove the auxiliary column
     df_sorted = df_sorted.drop(columns=["tos_order"])
 
     df_sorted = df_sorted[df_sorted['doi'].notna() & (df_sorted['doi'].str.strip() != "")]

@@ -36,19 +36,19 @@ def remove_duplicates_df(dataframe: pd.DataFrame) -> pd.DataFrame:
     >>> print(clean_df)
     """
 
-    # Confirmar que existe la columna DI o title
+    # Confirm that the 'doi' and 'title' columns exist
     if 'doi' not in dataframe.columns or 'title' not in dataframe.columns:
         raise ValueError("The DataFrame doesn't contain the columns 'DI' or 'title'.")
 
-    # Filtro (Dataframe sin valores nulos)
+    # Filter (DataFrame without null values)
     df_cleaned = dataframe[
-        dataframe['doi'].notna() | dataframe['title'].notna()  # Eliminar las celdas sin valores.
+        dataframe['doi'].notna() | dataframe['title'].notna()  # Delete rows without values.
     ].drop_duplicates(
         subset=['doi', 'title'],
         keep='first'
     )
 
-    # Dataframe con valores nulos
+    # DataFrame with null values
     df_empty = dataframe[
         dataframe['doi'].isna() & dataframe['title'].isna()
     ]
@@ -56,5 +56,5 @@ def remove_duplicates_df(dataframe: pd.DataFrame) -> pd.DataFrame:
 
     df_final = pd.concat([df_cleaned, df_empty])
 
-    # Retornar el DataFrame limpio
+    # Return the cleaned DataFrame
     return df_final, duplicates_removed

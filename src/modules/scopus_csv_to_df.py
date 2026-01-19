@@ -2,6 +2,7 @@ import pandas as pd
 import re
 import unicodedata
 from rapidfuzz import process, fuzz
+import os
 
 def scopus_csv_to_df(file_path, scimago, score_cutoff=85):
     """

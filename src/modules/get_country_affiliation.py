@@ -47,34 +47,34 @@ def extract_countries(df: pd.DataFrame, country_codes_file: str) -> pd.DataFrame
     country_df.columns = [col.strip().lower() for col in country_df.columns]
 
 
-    # Aseguramos los nombres esperados
+    # Ensure expected column names are present
     country_df.columns = [col.strip().lower() for col in country_df.columns]
 
-    # Verificamos que existan columnas válidas
+    # Verify that valid columns exist
     expected_cols = {'name', 'alpha-2', 'alpha-3'}
     actual_cols = set(country_df.columns)
     if not expected_cols.issubset(actual_cols):
-        raise ValueError(f"El archivo debe tener las columnas: {expected_cols}. Columnas encontradas: {actual_cols}")
+        raise ValueError(f"The file must have the columns: {expected_cols}. Columns found: {actual_cols}")
 
 
-    # Normalizamos columnas
+    # Normalize columns
     country_df = country_df.rename(columns={
         'name': 'name',
         'alpha-2': 'alpha2',
         'alpha-3': 'alpha3'
     })
 
-    # Convertimos a mayúsculas y eliminamos nulos
+    # Convert to uppercase and drop nulls
     country_df = country_df.dropna(subset=['name', 'alpha2', 'alpha3'])
     country_df = country_df.astype(str).apply(lambda col: col.str.strip().str.upper())
 
-    # Creamos tabla larga con todas las variantes posibles
+    # Create long table with all possible variants
     long_df = pd.DataFrame({
         'code': pd.concat([country_df['name'], country_df['alpha2'], country_df['alpha3']]),
         'name': pd.concat([country_df['name']] * 3)
     })
 
-    # Compilar patrones regex
+    # Compile regex patterns
     name_patterns: List[Tuple[re.Pattern, str]] = [
         (re.compile(rf"\b{re.escape(n)}\b"), n)
         for n in sorted(long_df['name'].unique(), key=len, reverse=True)
