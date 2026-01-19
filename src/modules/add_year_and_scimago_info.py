@@ -1,5 +1,4 @@
 import pandas as pd
-from typing import Any
 
 def add_year_and_scimago_info(
     scimago_raw: pd.DataFrame,
@@ -46,7 +45,6 @@ def add_year_and_scimago_info(
         on='SR'
     )
     
-
     # 3) Left‑merge with scimagojr_df on journal_id=Sourceid and year=year
     enriched = scimago_with_year.merge(
         scimagojr_df,
