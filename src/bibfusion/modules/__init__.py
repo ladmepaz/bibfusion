@@ -40,7 +40,6 @@ from .get_openalex_data import (
 from .citation_scopus import citation_scopus  # Extracts citations from Scopus
 from .scopus_get_article_entity import scopus_get_article_entity  # Gets article entity from Scopus
 from .fill_author_from_full_names import fill_author_from_full_names  # Fills author names from full names
-from .extract_orcids import extract_orcids  # Extracts ORCID IDs from Scopus data
 
 # ==========================
 #  Common or shared
@@ -55,24 +54,8 @@ from .aggregate_sr_and_attach_scimago_ids import aggregate_sr_and_attach_scimago
 from .fill_missing_issn_eissn_with_scimago import fill_missing_issn_eissn_with_scimago  # Fills missing ISSN/EISSN with Scimago
 from .resolve_duplicate_sourceids import resolve_duplicate_sourceids  # Resolves duplicate source IDs
 from .add_year_and_scimago_info import add_year_and_scimago_info  # Adds year and Scimago info to scimagodb
-from .to_xlsx import export_csvs_as_excel  # Combines CSV files into an Excel file
-from .build_user_dataset import build_user_dataset_from_all  # Build UserDataset.xlsx from All_*.csv (phase 1)
-from .cross_consolidate_all_authors import cross_consolidate_all_authors  # Cross-source author identity consolidation
-from .build_coauthor_edges import build_coauthor_edges_links  # Build simple coauthor edges (from,to,year,SR,openalex_work_id)
-from .build_coauthor_network import build_coauthor_network_for_gephi  # Build aggregated coauthor network (edges/nodes) for Gephi
-
-# ==========================
-#  Tree of Science
-# ==========================
-from .get_citation_network import get_citation_network  # Gets the citation network (root, trunk, branches)
-from .clean_citation_network import clean_citation_network  # Cleans the citation network
-from .add_community_branch import add_community_branch  # Adds a community branch to the citation network
-from .get_tos import get_tos
-from .get_tos_df import get_tos_df
-from .graph_to_df import graph_to_df  # Converts the citation network to a DataFrame
-from .merge_tos_with_articles import merge_tos_with_articles  # Merges ToS with articles
-from .sort_by_tos_and_year import sort_by_tos_and_year  # Sorts by ToS and year
-from .add_tos_to_data_excel import add_tos_to_data_excel  # Adds ToS data to Excel
+from .merge_sources import (normalize_doi as normalize_cross_doi, merge_articles, merge_authors, merge_from_outputs)
+from .merge_sources import merge_all_entities
 
 # ============================
 # DEFINING EXPORTS WITH __all__
@@ -105,6 +88,7 @@ __all__ = [
     "citation_scopus",
     "scopus_get_article_entity",
     "fill_author_from_full_names",
+    "enrich_scopus_with_openalex_authors",
 
     # ==========================
     #  Common or shared
@@ -124,9 +108,11 @@ __all__ = [
     "cross_consolidate_all_authors",
     "build_coauthor_edges_links",
     "build_coauthor_network_for_gephi",
+    "normalize_cross_doi",
+    "merge_articles",
+    "merge_authors",
+    "merge_from_outputs",
+    "merge_all_entities"
 ]
 
-from .merge_sources import (normalize_doi as normalize_cross_doi, merge_articles, merge_authors, merge_from_outputs)
 
-
-from .merge_sources import merge_all_entities
