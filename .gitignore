@@ -1,17 +1,25 @@
-﻿# Local outputs and large artifacts
+﻿# Local outputs and generated results
 all_data_wos_scopus/*.csv
 all_data_wos_scopus/*.xlsx
-Scopus_results/**
-WoS_results/**
+Scopus_results/
+WoS_results/
 *.log
 *.tmp
 *.bak
-src/**/__pycache__/**
-__pycache__/**
+
+# Python cache
+__pycache__/
 *.pyc
-# Local notebooks and temp
-*.ipynb_checkpoints/**
+
+# Notebooks and OS files
+.ipynb_checkpoints/
 .tmp_*
 *.DS_Store
-# Large test data (handled externally)
-tests/files/scimago.csv
+
+# Large or external data
+data/scimago.csv
+
+# Python packaging artifacts
+*.egg-info/
+dist/
+build/
