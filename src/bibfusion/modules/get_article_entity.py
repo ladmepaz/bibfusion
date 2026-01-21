@@ -1,4 +1,4 @@
-﻿import pandas as pd
+import pandas as pd
 
 def get_article_entity(wos_df_3: pd.DataFrame) -> pd.DataFrame:
     """
