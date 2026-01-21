@@ -26,19 +26,6 @@ from modules import scopus_get_article_entity  # Gets article entity from Scopus
 from modules import fill_author_from_full_names  # Fills author names from full names
 
 # ==========================
-#  Tree of Science (ToS)
-# ==========================
-from modules import get_citation_network  # Gets the citation network (root, trunk, branches)
-from modules import clean_citation_network  # Cleans the citation network
-from modules import add_community_branch  # Adds a community branch to the citation network
-from modules import get_tos # Gets the Tree of Science (ToS)
-from modules import get_tos_df # Gets the ToS DataFrame
-from modules import graph_to_df # Converts ToS graph to DataFrame
-from modules import merge_tos_with_articles # Merges ToS with article data
-from modules import sort_by_tos_and_year # Sorts ToS by year
-from modules import add_tos_to_data_excel # Adds ToS data to Excel output
-
-# ==========================
 #  Common or shared
 # ==========================
 
@@ -221,18 +208,6 @@ def preprocessing_df(path_wos=None,path_scopus=None):
         article = get_article_entity(wos_df_3)
         print("11. Article entity obtained")
         article.to_csv(os.path.join(output_dir,'Article.csv'), index=False)
-
-            
-        ##############################################
-        #        Get ToS (root, trunk, branchs)
-        ##############################################
-        
-        ##############################################
-        #        Get ToS (root, trunk, branchs)
-        ##############################################
-
-        # Tree of Science generation skipped for WoS (legacy)
-        print("13. Tree of Science (WoS) omitted; only CSV files are generated")
 
     else:
         print("""
@@ -436,18 +411,6 @@ def preprocessing_df(path_wos=None,path_scopus=None):
         affiliation = extract_countries(affiliation_0, country_codes_file)
         affiliation.to_csv(os.path.join(output_dir,'Affiliation.csv'), index=False)
         print("18. Affiliation countries extracted")
-        
-            
-        ##############################################
-        #        Get ToS (root, trunk, branchs)
-        ##############################################
-        
-        ##############################################
-        #        Get ToS (root, trunk, branchs)
-        ##############################################
-
-        # Tree of Science generation skipped for Scopus (legacy)
-        print("19. Tree of Science (Scopus) skipped; only CSVs generated")
 
         # Consolidated All_* outputs when both sources are available
         try:
@@ -467,66 +430,6 @@ def preprocessing_df(path_wos=None,path_scopus=None):
               """) 
  
     if path_wos and path_scopus:
-
-        ##############################################
-        #        Get ToS (root, trunk, branchs)
-        ##############################################
-        
-        if isinstance(path_wos, str):
-            path_wos = [path_wos]
-        if isinstance(path_scopus, str):
-            path_scopus = [path_scopus]
-        else:
-            raise ValueError("path_wos and path_scopus must be a string or a list of strings.")
-        
-        # Take the first file to obtain the base folder (they are all in the same folder)    
-        base_dir_wos = os.path.dirname(path_wos[0])
-        base_dir_scopus = os.path.dirname(path_scopus[0])
-        if base_dir_wos != base_dir_scopus:
-            raise ValueError("The WoS and Scopus files must be in the same root folder.")
-        elif base_dir_wos == base_dir_scopus:
-            base_dir = base_dir_wos
-        else:
-            raise ValueError("Error determining the root folder.")
-
-        # Load citation DataFrames
-        wos_citacion = pd.read_csv(os.path.join(base_dir, "WoS_results/Citation.csv"))
-        scopus_citation = pd.read_csv(os.path.join(base_dir, "Scopus_results/Citation.csv"))
-        citation = pd.concat([wos_citacion, scopus_citation], ignore_index=True)
-
-        # Get the citation network (root, trunk, branches)
-        citation_network = get_citation_network(citation)
-        print("1. Citation network obtained")
-
-        # Clean the citation network
-        citation_network = clean_citation_network(citation_network)
-        print("2. Citation network cleaned")
-        # Add community branches
-        citation_network = add_community_branch(citation_network)
-        print("3. Community branches added to the citation network")
-
-        # Get ToS (root, trunk, branches)
-        tos = get_tos(citation_network)
-        print("4. ToS obtained from the citation network")
-
-        article_wos = pd.read_csv(os.path.join(base_dir, "WoS_results/Article.csv"))
-        article_scopus = pd.read_csv(os.path.join(base_dir, "Scopus_results/Article.csv"))
-        article = pd.concat([article_wos, article_scopus], ignore_index=True)
-
-        # Convert ToS to DataFrame
-        df_nodos, df_aristas, df_tos_initial = graph_to_df(tos,article)
-        df_nodos.to_csv(os.path.join(base_dir, "tos_df_nodes.csv"), index=False)
-        df_aristas.to_csv(os.path.join(base_dir, "tos_df_edges.csv"), index=False)
-        print("5. ToS from the citation network converted to DataFrame, nodes and edges exported.")
-
-
-        # Get ToS DataFrame
-        dataframe_tos_initial = merge_tos_with_articles(df_tos_initial, article)
-        print("18. Information from the WoS network extracted from 'Article'")
-
-        # Clean and sort ToS
-        tos_df = sort_by_tos_and_year(dataframe_tos_initial)
-        tos_df.to_csv(os.path.join(base_dir, "TreeOfScience.csv"), index=False)
 
         print("""
               =================================================
