@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bibfusion"
+version = "0.1.0"
+description = "A Python package for merging, preprocessing, and enriching bibliographic data from WoS, Scopus, and OpenAlex."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Angelo Britto" }
+]
+
+dependencies = [
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "rapidfuzz>=3.0",
+    "requests>=2.30"
+]
+
+keywords = [
+    "bibliometrics",
+    "scientometrics",
+    "wos",
+    "scopus",
+    "openalex",
+    "tree of science"
+]
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Science/Research"
+]
+
+[project.urls]
+Homepage = "https://github.com/"
+Repository = "https://github.com/"
+Issues = "https://github.com/"
+
+[project.scripts]
+bibfusion = "bibfusion.__main__:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
