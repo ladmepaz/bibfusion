@@ -37,7 +37,6 @@ from .modules import aggregate_sr_and_attach_scimago_ids # Aggregates SR and att
 from .modules import fill_missing_issn_eissn_with_scimago # Fills missing ISSN/EISSN with Scimago
 from .modules import resolve_duplicate_sourceids # Resolves duplicate source IDs in WoS
 from .modules import add_year_and_scimago_info # Adds year and Scimago info to scimagodb
-from .modules import export_csvs_as_excel # Combines CSV files into an Excel file
 from .modules import merge_all_entities  # Merge WoS + Scopus entities into consolidated All_* CSVs
 from .modules import consolidate_authors  # Consolidate authors into person-level identities
 
