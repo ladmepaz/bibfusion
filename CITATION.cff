@@ -1,0 +1,6 @@
+cff-version: 0.1.0
+title: BibFusion
+message: "If you use this software, please cite it."
+repository-code: "https://github.com/ladmepaz/bibfusion"
+version: 0.1.0
+license: MIT

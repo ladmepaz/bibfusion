@@ -40,9 +40,7 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/"
-Repository = "https://github.com/"
-Issues = "https://github.com/"
+Repository = "https://github.com/ladmepaz/preprocessing"
 
 [project.scripts]
 bibfusion = "bibfusion.__main__:main"
