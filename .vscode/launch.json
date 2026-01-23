@@ -1,14 +1,17 @@
-// .vscode/launch.json
 {
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "name": "Python: main.py",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${workspaceFolder}/src/main.py",
-      "console": "integratedTerminal",
-      "cwd": "${workspaceFolder}"
-    }
-  ]
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "BibFusion (module)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "bibfusion",
+            "justMyCode": true,
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+              "PYTHONPATH": "${workspaceFolder}/src"
+            }
+        }
+    ]
 }
