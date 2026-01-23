@@ -27,8 +27,11 @@ def merge_wos_ref(wos_df: pd.DataFrame, wos_ref_enriched: pd.DataFrame) -> pd.Da
         The combined dataframe with 'ismainarticle' column and all modifications applied.
     """ 
     
-    # Convertir todos los valores tipo string en mayúsculas sin afectar NaN u otros tipos
-    wos_ref_enriched = wos_ref_enriched.applymap(lambda x: x.upper() if isinstance(x, str) else x)
+    # Convert every string value to uppercase without affecting NaN or other types
+    wos_ref_enriched = wos_ref_enriched.map(
+    lambda x: x.upper() if isinstance(x, str) else x
+    )
+
     
     # Step 1: Add 'ismainarticle' Columns to Both DataFrames
     wos_df['ismainarticle'] = 'TRUE'
