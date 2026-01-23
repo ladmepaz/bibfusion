@@ -66,7 +66,7 @@ def scopus_get_article_entity(scopus_df_3):
     # 'manufacturers',
     # 'funding_details',
     'funding_texts',
-    'correspondence_address',
+    # 'correspondence_address',
     'editors',
     'sponsors',
     'conference_name',
