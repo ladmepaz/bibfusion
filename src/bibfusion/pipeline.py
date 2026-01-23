@@ -58,7 +58,7 @@ def measure_time(func):
     return wrapper
 
 @measure_time
-def preprocessing_df(path_wos=None,path_scopus=None,path_scimago=None):
+def preprocessing_df(path_wos=None, path_scopus=None, path_scimago=None, path_country=None):
     """
     Preprocessing the DataFrames of WoS and Scopus.
     """
@@ -107,7 +107,7 @@ def preprocessing_df(path_wos=None,path_scopus=None,path_scimago=None):
         print("3. WoS references extracted")
         
         # Enrich references with Openalex
-        wos_ref_enriched = enrich_references_with_openalex(wos_references)
+        wos_ref_enriched = (wos_references)
         wos_ref_enriched.to_csv(os.path.join(output_dir,'enrich_wos_ref.csv'))
         # wos_ref_enriched = pd.read_csv(os.path.join(output_dir,'enrich_wos_ref.csv'))
         print("4. WoS references enriched with OpenAlex")
@@ -198,9 +198,9 @@ def preprocessing_df(path_wos=None,path_scopus=None,path_scimago=None):
             print(f"[WARN] Author consolidation failed: {e}")
 
         # Get country affiliation
-        country_codes_file = "tests/files/country.csv"
+        country_codes_file = path_country
         affiliation_0 = fill_missing_affiliations(wos_author_affiliation_no_country)
-        affiliation = extract_countries(affiliation_0, country_codes_file)
+        affiliation = extract_countries(affiliation_0, path_country)
         print("10. Affiliation countries extracted")
         affiliation.to_csv(os.path.join(output_dir,'Affiliation.csv'), index=False)
 
@@ -405,7 +405,7 @@ def preprocessing_df(path_wos=None,path_scopus=None,path_scimago=None):
             print(f"[WARN] Failed the consolidation of authors (Scopus): {e}")
 
         # Get country affiliation
-        country_codes_file = "tests/files/country.csv"
+        country_codes_file = path_country
         affiliation_0 = fill_missing_affiliations(scopus_author_affiliation_no_country)
         affiliation = extract_countries(affiliation_0, country_codes_file)
         affiliation.to_csv(os.path.join(output_dir,'Affiliation.csv'), index=False)
