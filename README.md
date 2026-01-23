@@ -1,53 +1,40 @@
 # Preprocessing Package
 
-Este paquete contiene funciones para procesar datos bibliográficos desde diferentes fuentes.
+This package provides utilities to preprocess, clean, and harmonize bibliographic data from multiple scientific sources, primarily **Web of Science (WoS)** and **Scopus**.  
+It is designed to support bibliometric and scientometric analyses by transforming raw exports into structured pandas DataFrames.
 
-## Funciones
+⚠️ **Status:** under active development. APIs and internal structures may change.
 
--   **`wos_df()`**: Transforma archivos .txt de Web of Science a DataFrames de pandas.
--   **`scopus_df()`**: Convierte archivos .bib de Scopus a DataFrames de pandas.
--   **`doi_crossref()`**: Realiza una consulta a la API de Crossref y extrae información de un DOI.
--   **`scopus_ref()`**: Gestiona referencias de artículos, encontrando conexiones entre ellas.
+---
 
-## Instalación
+## Features
 
-Usa el siguiente comando para instalar las dependencias necesarias:
+- Parsing of raw bibliographic exports into structured DataFrames
+- Support for multiple data sources (WoS, Scopus, Crossref, OpenAlex)
+- Reference enrichment and linkage across sources
+- Designed for reproducible research workflows
 
-```
-$ pip install -r requirements.txt
-```
+---
 
-## Uso
+## Core Functions
 
-Ejemplo de cómo usar el paquete:
+- **`wos_df()`**  
+  Transforms Web of Science `.txt` export files into pandas DataFrames.
 
-```python
-from preprocessing import wos_df, scopus_df
+- **`scopus_df()`**  
+  Converts Scopus `.bib` export files into pandas DataFrames.
 
-df_wos = wos_df()
-df_scopus = scopus_df()
-```
+- **`doi_crossref()`**  
+  Queries the Crossref API to retrieve metadata associated with a given DOI.
 
-## Pipeline
+- **`scopus_ref()`**  
+  Processes and links article references, identifying relationships between cited documents.
 
-- See `docs/pipeline.md` for a concise end‑to‑end overview of the WoS preprocessing flow, key steps, and main outputs.
+---
 
-## Affiliations: Column Conventions
+## Installation
 
-- `affiliations` (WoS main articles only):
-  - Preserves the original WoS bracketed, per‑author format, e.g. `[LASTNAME, FIRSTNAME] AFFILIATION; ...`.
-  - Produced by the WoS parser and kept for rows where `ismainarticle == TRUE`.
+Clone the repository and install the required dependencies:
 
-- `affiliation_2` (OpenAlex references only):
-  - Stores institutions returned by OpenAlex per reference/authorship.
-  - Normalized to uppercase ASCII and semicolon‑separated.
-  - Used for rows where `ismainarticle == FALSE` to avoid mixing formats with `affiliations`.
-
-- Rationale:
-  - Keeps WoS main article affiliations intact and readable per author.
-  - Keeps OpenAlex reference institutions separate, with a consistent flat format.
-
-- Implementation notes:
-  - `enrich_references_with_openalex` writes institutions into `affiliation_2` (uppercase ASCII).
-  - `merge_wos_ref` preserves both columns in the merged dataframe.
-  - See also `docs/issue-author-affiliation-mapping.md` for a proposed per‑author affiliation edge table.
+```bash
+pip install -r requirements.txt
