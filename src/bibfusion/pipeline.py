@@ -442,8 +442,10 @@ def preprocessing_df(path_wos=None, path_scopus=None, path_scimago=None, path_co
 # preprocesing_df(r"path_wos" or [r"path_wos",r"path_wos_2"], r"path_scopus")
 if __name__ == "__main__":
     # Example/manual run (disabled by default)
-    # preprocesing_df(
-    #   path_wos=[r"C:\\path\\to\\wos.txt"],
-    #   path_scopus=r"C:\\path\\to\\scopus.csv"
+    # preprocessing_df(
+    #     path_wos=[None],
+    #     path_scopus=None,
+    #     path_scimago=r"..\..\data\scimago.csv",
+    #     path_country=r"..\..\data\country.csv",
     # )
     pass

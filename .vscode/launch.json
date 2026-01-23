@@ -1,13 +1,17 @@
 {
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "name": "Run bibfusion",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "bibfusion",
-      "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal"
-    }
-  ]
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "BibFusion (module)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "bibfusion",
+            "justMyCode": true,
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+              "PYTHONPATH": "${workspaceFolder}/src"
+            }
+        }
+    ]
 }
