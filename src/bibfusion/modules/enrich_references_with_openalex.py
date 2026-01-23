@@ -22,139 +22,105 @@ def _to_upper_ascii(text: str) -> str:
     return stripped.upper()
 
 # Enrich references with OpenAlex
-def get_paper_info_from_doi(doi, sr_ref=None, cr_ref=None, source_title=None, year=None, authors=None):
+def get_paper_info_from_doi(
+    doi,
+    sr_ref=None,
+    cr_ref=None,
+    source_title=None,
+    year=None,
+    authors=None,
+):
     """
-    Obtiene información detallada de un DOI usando la API de OpenAlex.
-    Incluye bucle de reintento y pausa por problemas de ConnectionError.
-    
-    Args:
-        doi (str): DOI del documento
-        sr_ref (str, opcional): Referencia del documento original
-    
-    Returns:
-        dict: Diccionario con información del documento
+    Fetch detailed paper information from OpenAlex using a DOI.
+    Always returns a dict with a consistent schema.
     """
     api_url = f"https://api.openalex.org/works/doi:{doi}"
-    
+
     try:
-        response = requests.get(api_url)
+        response = requests.get(api_url, timeout=30)
         response.raise_for_status()
         data = response.json()
-        
-        # Extracción de información básica
+
+        # ------------------------
+        # Basic metadata
+        # ------------------------
         title = data.get("title", "")
-        publication_year = data.get("publication_year", "N/A")
+        publication_year = data.get("publication_year", "")
+        openalex_work_id = data.get("id", "")
+
         source = data.get("primary_location", {}).get("source", {})
-        
-        # Preparar lista de autores, ORCIDs e IDs de OpenAlex
+        journal = source.get("display_name", "")
+
+        bibliographic_info = data.get("biblio", {})
+        volume = bibliographic_info.get("volume", "")
+        issue = bibliographic_info.get("issue", "")
+        first_page = bibliographic_info.get("first_page", "")
+        last_page = bibliographic_info.get("last_page", "")
+        page = f"{first_page}-{last_page}" if first_page or last_page else ""
+
+        # ------------------------
+        # Authors / ORCID / IDs / Affiliations
+        # ------------------------
         author_full_names = []
         orcids = []
         author_ids = []
         affiliations = []
-        
-        authorships = data.get("authorships", [])
-        for auth in authorships:
-            author_data = auth.get("author", {})
-            author_name = author_data.get("display_name", "N/A")
-            author_orcid = author_data.get("orcid", "N/A")
-            author_id = author_data.get("id", "")
-            
-            # Recolectar información de autores
-            author_full_names.append(author_name)
-            orcids.append(author_orcid)
-            author_ids.append(author_id if author_id else "")
-            
-            # Preparar lista de autores y ORCIDs
-            author_full_names = []
-            orcids = []
-            affiliations = []
-            
-            authorships = data.get("authorships", [])
-            for auth in authorships:
-                author_data = auth.get("author", {})
-                author_name = author_data.get("display_name", "N/A")
-                author_orcid = author_data.get("orcid", "N/A")
-                
-                # Recolectar información de autores
-                author_full_names.append(author_name)
-                orcids.append(author_orcid)
-                
-                # Recolectar afiliaciones
-                author_affiliations = [
-                    aff.get("display_name", "N/A") 
-                    for aff in auth.get("institutions", [])
-                ]
-                affiliations.append("; ".join(author_affiliations))
-            
-            # Extracción de keywords
-            keywords_list = data.get("keywords", [])
-            keywords = [keyword.get("display_name", "") for keyword in keywords_list]
-            keywords_str = "; ".join(filter(None, keywords)) if keywords else "N/A"
-            
-            # Información bibliográfica
-            bibliographic_info = data.get("biblio", {})
-            orcids = ["NO ORCID" if not orcid else orcid for orcid in orcids]
-            
-            return {
-                #"authors": "; ".join(filter(None, authors)),  # Filtra valores None
-                "authors": authors,
-                "doi": doi,
-                "SR_ref": sr_ref,
-                "CR_ref": cr_ref,
-                "year": year,
-                "source_title": source_title,
-                "author_full_names": "; ".join(filter(None, author_full_names)),
-                "journal": source.get("display_name", "N/A"),
-                "year_openalex": publication_year,
-                "abstract": data.get("abstract_inverted_index", "N/A"),
-                "title": title,
-                "volume": bibliographic_info.get("volume", "N/A"),
-                "issue": bibliographic_info.get("issue", "N/A"),
-                "page": f"{bibliographic_info.get('first_page', 'N/A')}-{bibliographic_info.get('last_page', 'N/A')}",
-                "journal_issue_number": bibliographic_info.get("issue", "N/A"),
-                "orcid": "; ".join(filter(None, orcids)),
-                "affiliations": "; ".join(filter(None, affiliations)),
-                "keywords": keywords_str,
-            }
-        
-        # Información bibliográfica
-        bibliographic_info = data.get("biblio", {})
-        openalex_work_id = data.get("id", "")
-        orcids = ["NO ORCID" if not orcid else orcid for orcid in orcids]
 
-        # Normalizar nombres a MAYÚSCULAS sin tildes
-        author_full_names_upper = _to_upper_ascii("; ".join(filter(None, author_full_names))) if author_full_names else ""
-        # Normalizar afiliaciones (para referencias las escribiremos en 'affiliation_2')
-        affiliations_joined = "; ".join(filter(None, affiliations)) if affiliations else ""
-        affiliation_2_upper = _to_upper_ascii(affiliations_joined) if affiliations_joined else ""
-        
+        for auth in data.get("authorships", []):
+            author_data = auth.get("author", {})
+
+            name = author_data.get("display_name", "")
+            orcid = author_data.get("orcid", "")
+            author_id = author_data.get("id", "")
+
+            author_full_names.append(name)
+            orcids.append(orcid if orcid else "NO ORCID")
+            author_ids.append(author_id)
+
+            insts = auth.get("institutions", [])
+            inst_names = [i.get("display_name", "") for i in insts if i.get("display_name")]
+            affiliations.append("; ".join(inst_names))
+
+        author_full_names_str = _to_upper_ascii("; ".join(author_full_names))
+        affiliation_2_str = _to_upper_ascii("; ".join(affiliations))
+
+        # ------------------------
+        # Keywords
+        # ------------------------
+        keywords_list = data.get("keywords", [])
+        keywords = [k.get("display_name", "") for k in keywords_list if k.get("display_name")]
+        keywords_str = "; ".join(keywords)
+
+        # ------------------------
+        # Abstract (inverted index)
+        # ------------------------
+        abstract = data.get("abstract_inverted_index", "")
+
         return {
-            #"authors": "; ".join(filter(None, authors)),  # Filtra valores None
-            "authors": authors,
             "doi": doi,
             "SR_ref": sr_ref,
             "CR_ref": cr_ref,
-            "year": year,
-            "source_title": source_title,
-            "author_full_names": author_full_names_upper,
-            "journal": source.get("display_name", "N/A"),
-            "year_openalex": publication_year,
-            "abstract": data.get("abstract_inverted_index", "N/A"),
+            "authors": authors,
+            "author_full_names": author_full_names_str,
+            "orcid": "; ".join(orcids),
+            "affiliation_2": affiliation_2_str,
             "title": title,
-            "volume": bibliographic_info.get("volume", "N/A"),
-            "issue": bibliographic_info.get("issue", "N/A"),
-            "page": f"{bibliographic_info.get('first_page', 'N/A')}-{bibliographic_info.get('last_page', 'N/A')}",
-            "journal_issue_number": bibliographic_info.get("issue", "N/A"),
-            "orcid": "; ".join(filter(None, orcids)),
-            # Para referencias, usamos 'affiliation_2' en lugar de 'affiliations'
-            "affiliation_2": affiliation_2_upper,
+            "source_title": source_title,
+            "journal": journal,
+            "journal_issue_number": issue,
+            "year": year,
+            "year_openalex": publication_year,
+            "volume": volume,
+            "issue": issue,
+            "page": page,
             "keywords": keywords_str,
-            "author_id_openalex": "; ".join(filter(None, author_ids)),
+            "abstract": abstract,
+            "author_id_openalex": "; ".join(author_ids),
             "openalex_work_id": openalex_work_id,
         }
-    
+
     except requests.exceptions.RequestException as e:
-        print(f"Error fetching data for DOI {doi}: {e}")
+        print(f"[OpenAlex ERROR] DOI {doi}: {e}")
         return None
 
 def enrich_references_with_openalex(df):
