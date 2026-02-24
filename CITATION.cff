@@ -5,10 +5,13 @@ type: software
 authors:
   - family-names: "Britto"
     given-names: "Angelo"
+    orcid: "https://orcid.org/0009-0004-4863-6283"
   - family-names: "Robledo"
     given-names: "Sebastian"
+    orcid: "https://orcid.org/0000-0003-4357-4402"
   - family-names: "Zuluaga"
     given-names: "Martha"
+    orcid: "https://orcid.org/0000-0003-1720-8476"
 repository-code: "https://github.com/ladmepaz/bibfusion"
 version: 1.0.0
 license: MIT
