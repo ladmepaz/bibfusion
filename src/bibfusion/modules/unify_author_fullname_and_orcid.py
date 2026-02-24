@@ -20,7 +20,8 @@ def unify_author_fullname_and_orcid_core(
         freq = names_series.value_counts(dropna=False)
         freq_df = freq.reset_index()
         freq_df.columns = ['name', 'count']
-        freq_df['length'] = freq_df['name'].str.len()
+        freq_df['length'] = freq_df['name'].astype(str).str.len()
+
 
         # Sort by 'length' descending, then 'count' descending
         freq_df = freq_df.sort_values(by=['length', 'count'], ascending=[False, False])
