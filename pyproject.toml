@@ -7,7 +7,7 @@ name = "bibfusion"
 version = "1.0.0"
 description = "A Python package for merging, preprocessing, and enriching bibliographic data from WoS, Scopus, and OpenAlex."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [
     { name = "Universidad Nacional de Colombia" }
@@ -31,7 +31,6 @@ keywords = [
 
 classifiers = [
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "License :: OSI Approved :: MIT License",
