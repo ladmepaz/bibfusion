@@ -1,6 +1,35 @@
 cff-version: 1.0.0
-title: BibFusion
-message: "If you use this software, please cite it."
+title: "BibFusion"
+message: "If you use this software, please cite it using the metadata from this file."
+type: software
+authors:
+  - family-names: "Britto"
+    given-names: "Angelo"
+  - family-names: "Robledo"
+    given-names: "Sebastian"
+  - family-names: "Zuluaga"
+    given-names: "Martha"
 repository-code: "https://github.com/ladmepaz/bibfusion"
 version: 1.0.0
 license: MIT
+doi: "10.47909/ijsmc.342"
+date-released: 2026-01-01
+
+preferred-citation:
+  type: article
+  authors:
+    - family-names: "Britto"
+      given-names: "Angelko"
+    - family-names: "Robledo"
+      given-names: "Sebastian"
+    - family-names: "Zuluaga"
+      given-names: "Martha"
+  doi: "10.47909/ijsmc.342"
+  journal: "Iberoamerican Journal of Science Measurement and Communication"
+  month: 1
+  title: "BibFusion: A Python package to integrate, deduplicate, and harmonize exported bibliographic records from Scopus and Web of Science for bibliometric analysis"
+  issue: 1
+  volume: 6
+  year: 2026
+  start: 1
+  end: 21 
