@@ -3,8 +3,8 @@ from .pipeline import preprocessing_df
 
 def main():
     preprocessing_df(
-        path_wos=r"C:\Users\User\Documents\Preprocesamiento\Tests\test_3 articles\Wos.txt",
-        path_scopus=r"C:\Users\User\Documents\Preprocesamiento\Tests\test_3 articles\LLM.csv",
+        path_wos=r"PATH/TO/YOUR/FILE/wos_data.txt",
+        path_scopus=r"PATH/TO/YOUR/FILE/scopus_data.csv",
         path_scimago=r"data\scimago.csv",
         path_country=r"data\country.csv",
     )
