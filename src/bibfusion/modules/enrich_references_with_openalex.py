@@ -29,12 +29,14 @@ def get_paper_info_from_doi(
     source_title=None,
     year=None,
     authors=None,
+    API_KEY_OPENALEX=None
 ):
     """
     Fetch detailed paper information from OpenAlex using a DOI.
     Always returns a dict with a consistent schema.
     """
-    api_url = f"https://api.openalex.org/works/doi:{doi}"
+    API_KEY = API_KEY_OPENALEX
+    api_url = f"https://api.openalex.org/works/doi:{doi}?api_key={API_KEY}"
 
     try:
         response = requests.get(api_url, timeout=30)
@@ -123,7 +125,7 @@ def get_paper_info_from_doi(
         print(f"[OpenAlex ERROR] DOI {doi}: {e}")
         return None
 
-def enrich_references_with_openalex(df):
+def enrich_references_with_openalex(df, API_KEY_OPENALEX):
     """
         Enriches a references DataFrame with information from OpenAlex.
 
@@ -150,7 +152,7 @@ def enrich_references_with_openalex(df):
         authors = row['authors']  # Use the existing authors column
 
         try:
-            paper_info = get_paper_info_from_doi(doi, sr_ref, cr_ref, source_title, year, authors)
+            paper_info = get_paper_info_from_doi(doi, sr_ref, cr_ref, source_title, year, authors, API_KEY_OPENALEX)
             
             if paper_info:
                 results.append(paper_info)

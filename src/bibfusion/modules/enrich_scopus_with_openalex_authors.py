@@ -36,6 +36,7 @@ def enrich_scopus_with_openalex_authors(
     uppercase_ascii: bool = True,
     keep_raw: bool = True,
     only_ids: bool = False,
+    API_KEY_OPENALEX=None
 ) -> pd.DataFrame:
     """
     Enrich Scopus rows using OpenAlex by DOI to fetch authorship metadata.
@@ -69,8 +70,9 @@ def enrich_scopus_with_openalex_authors(
         doi = _clean_doi(doi_raw)
         if not doi:
             continue
-
-        url = f"https://api.openalex.org/works/doi:{doi}"
+        
+        API_KEY = API_KEY_OPENALEX
+        url = f"https://api.openalex.org/works/doi:{doi}?api_key={API_KEY}"
         params = {}
         if mailto:
             params['mailto'] = mailto
