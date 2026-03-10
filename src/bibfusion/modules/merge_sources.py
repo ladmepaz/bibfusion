@@ -54,120 +54,107 @@ def _best_row(rows: List[pd.Series]) -> pd.Series:
     return rows_sorted[0]
 
 
-def merge_articles(wos_article: pd.DataFrame, scopus_article: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, str]]:
-    a = wos_article.copy(); a['__source'] = 'wos'
-    b = scopus_article.copy(); b['__source'] = 'scopus'
-    for df in (a, b):
-        df['__doi_norm'] = df.get('doi', '').apply(normalize_doi)
-        df['__title_key'] = df.get('title', '').apply(_ascii_upper)
-        df['__year'] = pd.to_numeric(df.get('year', ''), errors='coerce').astype('Int64')
+def merge_articles(wos_article: pd.DataFrame,
+                   scopus_article: pd.DataFrame):
 
-    combined = pd.concat([a, b], ignore_index=True, sort=False)
+    def normalize_bool(x):
+        return str(x).strip().upper() == "TRUE"
 
-    # Group with DOI
-    with_doi = combined[combined['__doi_norm'] != '']
-    groups = []
-    doi_to_primary_sr: Dict[str, str] = {}
-    for doi, g in with_doi.groupby('__doi_norm'):
-        chosen = _best_row([r for _, r in g.iterrows()])
-        # sources_merged
-        sources = ';'.join(sorted(g['__source'].unique()))
-        chosen = chosen.copy()
-        chosen['sources_merged'] = sources
-        groups.append(chosen)
-        # primary SR for this DOI
-        doi_to_primary_sr[doi] = chosen.get('SR', '')
+    def normalize_doi(x):
+        if pd.isna(x):
+            return ""
+        x = str(x).strip().lower()
+        x = x.replace("https://doi.org/", "")
+        x = x.replace("http://doi.org/", "")
+        return x
 
-    merged_with_doi = pd.DataFrame(groups) if groups else with_doi.copy()
+    # ===================== COPIAS =====================
+    wos = wos_article.copy()
+    scopus = scopus_article.copy()
 
-    # Without DOI: dedupe by title+year using fuzzy match within same title_key
-    without_doi = combined[combined['__doi_norm'] == '']
-    used = set()
-    rows_no_doi = []
-    for _, grp in without_doi.groupby(['__title_key', '__year']):
-        if len(grp) == 1:
-            r = grp.iloc[0].copy()
-            r['sources_merged'] = r['__source']
-            rows_no_doi.append(r)
-            continue
-        titles = grp['title'].astype(str).tolist()
-        # choose the best row
-        chosen = _best_row([r for _, r in grp.iterrows()])
-        chosen = chosen.copy()
-        chosen['sources_merged'] = ';'.join(sorted(grp['__source'].unique()))
-        rows_no_doi.append(chosen)
+    wos["__source"] = "wos"
+    scopus["__source"] = "scopus"
 
-    merged_no_doi = pd.DataFrame(rows_no_doi) if rows_no_doi else without_doi.copy()
+    for df in (wos, scopus):
+        df["__doi_norm"] = df.get("doi", "").apply(normalize_doi)
+        df["__is_main"] = df.get("ismainarticle", False).apply(normalize_bool)
 
-    merged = pd.concat([merged_with_doi, merged_no_doi], ignore_index=True, sort=False)
+    print("WoS main (orig):", int(wos["__is_main"].sum()))
+    print("Scopus main (orig):", int(scopus["__is_main"].sum()))
 
-    # Clean helper cols
-    merged = merged.drop(columns=['__doi_norm', '__title_key', '__year', '__source'], errors='ignore')
+    # ===================== IDENTIFICAR DOIs COMPARTIDOS ENTRE FUENTES =====================
+    wos_dois = set(wos["__doi_norm"]) - {""}
+    scopus_dois = set(scopus["__doi_norm"]) - {""}
 
-    # Normalize year (remove .0) and SR formatting
-    if 'year' in merged.columns:
-        def _clean_year(y):
-            try:
-                val = float(y)
-                if pd.isna(val):
-                    return y
-                return int(val)
-            except Exception:
-                return y
-        merged['year'] = merged['year'].apply(_clean_year)
+    shared_dois = wos_dois & scopus_dois
 
-    def _clean_sr_row(row):
-        sr = str(row.get('SR', '') or '')
-        sr = re.sub(r",\\s*(\\d{4})\\.0\\b", r", \\1", sr)
-        sr = re.sub(r"\\s+", " ", sr).strip()
-        # If SR is missing/NaN-like, rebuild from author_full_names/year/source_title if possible
-        if not sr or sr.upper().startswith('NAN'):
-            first = ''
-            full = row.get('author_full_names', '')
-            if isinstance(full, str) and full.strip():
-                first_full = full.split(';')[0].strip()
-                first_full = _ascii_upper(first_full)
-                if ',' in first_full:
-                    first = first_full
-                else:
-                    parts = first_full.split()
-                    if len(parts) >= 2:
-                        last = parts[-1]
-                        init = parts[0][0] if parts[0] else ''
-                        first = f"{last}, {init}" if init else last
-                    elif parts:
-                        first = parts[0]
-            year = str(row.get('year', '') or '').strip()
-            m = re.match(r"(\\d{4})", year)
-            if m:
-                year = m.group(1)
-            src = _ascii_upper(str(row.get('source_title', '') or '').strip())
-            parts_sr = [p for p in [first, year, src] if p]
-            if parts_sr:
-                sr = ', '.join(parts_sr)
-        return sr
+    # ===================== FILAS A FUSIONAR =====================
+    wos_shared = wos[wos["__doi_norm"].isin(shared_dois)].copy()
+    scopus_shared = scopus[scopus["__doi_norm"].isin(shared_dois)].copy()
 
-    if 'SR' in merged.columns:
-        merged['SR'] = merged.apply(_clean_sr_row, axis=1)
-        # Remove lingering ".0" in numeric segments and tidy spaces
-        merged['SR'] = (
-            merged['SR']
-            .str.replace(r"(\d{4})\.0\b", r"\1", regex=True)
-            .str.replace(r"(\d+)\.0\b", r"\1", regex=True)
-            .str.replace(r"\.0,", ",", regex=True)
-            .str.replace(r"\s+", " ", regex=True)
-            .str.strip()
-        )
-        # Drop rows with SR starting with NAN (no author info)
-        merged = merged[~merged['SR'].str.startswith('NAN', na=False)]
+    # emparejar 1 a 1 por DOI SIN colapsar duplicados internos
+    merged_shared = []
 
-    # Ensure ismainarticle is boolean and no NaN
-    if 'ismainarticle' in merged.columns:
-        merged['ismainarticle'] = merged['ismainarticle'].fillna(False).astype(bool)
-    else:
-        merged['ismainarticle'] = False
+    for doi in shared_dois:
 
-    return merged, doi_to_primary_sr
+        w_grp = wos_shared[wos_shared["__doi_norm"] == doi]
+        s_grp = scopus_shared[scopus_shared["__doi_norm"] == doi]
+
+        # emparejar mínimo número común
+        min_len = min(len(w_grp), len(s_grp))
+
+        for i in range(min_len):
+            row = w_grp.iloc[i].copy()
+            row["sources_merged"] = "wos;scopus"
+            row["ismain_wos"] = row["__is_main"]
+            row["ismain_scopus"] = s_grp.iloc[i]["__is_main"]
+            row["ismainarticle"] = row["ismain_wos"] or row["ismain_scopus"]
+            merged_shared.append(row)
+
+        # sobrantes quedan independientes
+        if len(w_grp) > min_len:
+            for i in range(min_len, len(w_grp)):
+                row = w_grp.iloc[i].copy()
+                row["sources_merged"] = "wos"
+                row["ismain_wos"] = row["__is_main"]
+                row["ismain_scopus"] = False
+                row["ismainarticle"] = row["ismain_wos"]
+                merged_shared.append(row)
+
+        if len(s_grp) > min_len:
+            for i in range(min_len, len(s_grp)):
+                row = s_grp.iloc[i].copy()
+                row["sources_merged"] = "scopus"
+                row["ismain_wos"] = False
+                row["ismain_scopus"] = row["__is_main"]
+                row["ismainarticle"] = row["ismain_scopus"]
+                merged_shared.append(row)
+
+    merged_shared = pd.DataFrame(merged_shared)
+
+    # ===================== FILAS NO COMPARTIDAS =====================
+    wos_only = wos[~wos["__doi_norm"].isin(shared_dois)].copy()
+    scopus_only = scopus[~scopus["__doi_norm"].isin(shared_dois)].copy()
+
+    for df, source in [(wos_only, "wos"), (scopus_only, "scopus")]:
+        df["sources_merged"] = source
+        df["ismain_wos"] = df["__is_main"] if source == "wos" else False
+        df["ismain_scopus"] = df["__is_main"] if source == "scopus" else False
+        df["ismainarticle"] = df["__is_main"]
+
+    # ===================== CONCAT FINAL =====================
+    merged = pd.concat(
+        [merged_shared, wos_only, scopus_only],
+        ignore_index=True,
+        sort=False
+    )
+
+    # ===================== SANITY CHECK =====================
+    print("WoS main merged:", int(merged["ismain_wos"].sum()))
+    print("Scopus main merged:", int(merged["ismain_scopus"].sum()))
+    print("Main después merge:", int(merged["ismainarticle"].sum()))
+
+    return merged, {}
 
 
 def merge_authors(
@@ -624,6 +611,7 @@ def merge_all_entities(wos_dir: str, scopus_dir: str, out_dir: str) -> Dict[str,
     wos_article = pd.read_csv(f"{wos_dir}/Article.csv")
     scopus_article = pd.read_csv(f"{scopus_dir}/Article.csv")
     all_articles, doi_map = merge_articles(wos_article, scopus_article)
+    print("Main después merge:", len(all_articles[all_articles['ismainarticle'] == True]))
     all_articles.to_csv(f"{out_dir}/All_Articles.csv", index=False)
 
     # Authors / ArticleAuthor
