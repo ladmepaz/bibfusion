@@ -58,7 +58,7 @@ def measure_time(func):
     return wrapper
 
 @measure_time
-def preprocessing_df(path_wos=None, path_scopus=None, path_scimago=None, path_country=None):
+def preprocessing_df(path_wos=None, path_scopus=None, path_scimago=None, path_country=None, API_KEY_OPENALEX=None):
     """
     Preprocessing the DataFrames of WoS and Scopus.
     """
@@ -85,20 +85,17 @@ def preprocessing_df(path_wos=None, path_scopus=None, path_scimago=None, path_co
         wos_df.to_csv(os.path.join(output_dir, "1_temp_wos_df.csv"), index=False)
         print("1. WoS DataFrame successfully created")
         
-        # Remove duplicates
-        wos_df, duplicates_removed = remove_duplicates_df(wos_df)
-        wos_df.to_csv(os.path.join(output_dir, "2_temp_wos_df_removeDuplicates.csv"), index=False)
-        print(f"2. Duplicates removed: {duplicates_removed}")
-
         # Enrich WoS main articles with OpenAlex authors (names in uppercase ASCII, replace ORCID)
         wos_df = enrich_wos_with_openalex_authors(
             wos_df,
             replace=True,
             keep_raw=False,
             uppercase_ascii=True,
+            API_KEY_OPENALEX=API_KEY_OPENALEX
         )
         wos_df.to_csv(os.path.join(output_dir, "2-1_temp_wos_df_openalex_authors.csv"), index=False)
-        print("2.1. WoS authors enriched with OpenAlex (names/ORCID/IDs)")
+        # wos_df = pd.read_csv(os.path.join(output_dir, "2-1_temp_wos_df_openalex_authors.csv"))
+        print("2. WoS authors enriched with OpenAlex (names/ORCID/IDs)")
 
         # Get references
         wos_references, wos_citation = get_wos_references(wos_df)
@@ -107,7 +104,7 @@ def preprocessing_df(path_wos=None, path_scopus=None, path_scimago=None, path_co
         print("3. WoS references extracted")
         
         # Enrich references with Openalex
-        wos_ref_enriched = (wos_references)
+        wos_ref_enriched = enrich_references_with_openalex(wos_references, API_KEY_OPENALEX)
         wos_ref_enriched.to_csv(os.path.join(output_dir,'enrich_wos_ref.csv'))
         # wos_ref_enriched = pd.read_csv(os.path.join(output_dir,'enrich_wos_ref.csv'))
         print("4. WoS references enriched with OpenAlex")
@@ -241,32 +238,28 @@ def preprocessing_df(path_wos=None, path_scopus=None, path_scimago=None, path_co
         # scopus_df = pd.read_csv(os.path.join(output_dir,'1_temp_scopus_df.csv'))
         print("1. Scopus DataFrame created")
 
-        # Remove duplicates
-        scopus_df_2, duplicates_removed = remove_duplicates_df(scopus_df)
-        scopus_df_2.to_csv(os.path.join(output_dir,'2_temp_scopus_df_2.csv'), index=False)
-        # scopus_df_2 = pd.read_csv(os.path.join(output_dir,'2_temp_scopus_df_2.csv'))
-        print(f"2. Duplicates removed: {duplicates_removed}")
-
         # Enrich Scopus main articles with OpenAlex authors (names uppercase ASCII, ORCID, IDs)
-        scopus_df_2 = enrich_scopus_with_openalex_authors(
-            scopus_df_2,
+        scopus_df = enrich_scopus_with_openalex_authors(
+            scopus_df,
             replace=True,
             uppercase_ascii=True,
             keep_raw=False,
+            API_KEY_OPENALEX=API_KEY_OPENALEX
         )
-        scopus_df_2.to_csv(os.path.join(output_dir,'2-1_temp_scopus_df_openalex_authors.csv'), index=False)
-        print("2.1. Scopus authors enriched with OpenAlex (names/ORCID/IDs)")
+        scopus_df.to_csv(os.path.join(output_dir,'2-1_temp_scopus_df_openalex_authors.csv'), index=False)
+        # scopus_df_2 = pd.read_csv(os.path.join(output_dir,'2-1_temp_scopus_df_openalex_authors.csv'))
+        print("2. Scopus authors enriched with OpenAlex (names/ORCID/IDs)")
 
         
         # Extract references
-        extraction_linksref_openalex = generate_references_column(scopus_df_2)
+        extraction_linksref_openalex = generate_references_column(scopus_df, API_KEY_OPENALEX)
         extraction_linksref_openalex.to_csv(os.path.join(output_dir,'3_temp_extraction_linksref_openalex.csv'), index=False)
         # extraction_linksref_openalex = pd.read_csv(os.path.join(output_dir,'3_temp_extraction_linksref_openalex.csv'))
         print("3. Scopus references extracted")
 
         # Enrich references with OpenAlex
-        enrich_ref = openalex_enrich_ref(extraction_linksref_openalex)
-        enrich_ref.to_csv(os.path.join(output_dir,'4_temp_extraction_linksref_openalex_enriched.csv'))
+        enrich_ref = openalex_enrich_ref(extraction_linksref_openalex, API_KEY_OPENALEX)
+        enrich_ref.to_csv(os.path.join(output_dir,'4_temp_extraction_linksref_openalex_enriched.csv'), index=False)
         # enrich_ref = pd.read_csv(os.path.join(output_dir,'4_temp_extraction_linksref_openalex_enriched.csv'))
         enrich_ref = enrich_ref.rename(columns={'orcids': 'orcid'})
         print("4. Scopus references enriched with OpenAlex")
@@ -291,7 +284,7 @@ def preprocessing_df(path_wos=None, path_scopus=None, path_scimago=None, path_co
         print("7. Scopus citation DataFrame generated")
 
         # Enrich references with journal abbreviation
-        scopus_df_3 = merge_scopus_ref(scopus_df_2, df_with_sr)
+        scopus_df_3 = merge_scopus_ref(scopus_df, df_with_sr)
         print("8. Scopus and references DataFrames merged")
 
         scopus_df_3 = fill_author_from_full_names(scopus_df_3)
@@ -419,7 +412,7 @@ def preprocessing_df(path_wos=None, path_scopus=None, path_scimago=None, path_co
                 merge_all_entities(wos_output_dir, scopus_output_dir, all_dir)
                 print("20. All_* (WoS+Scopus) generated in 'all_data_wos_scopus'")
         except Exception as e:
-            print(f"[WARN] Failed to merge WoS+Scopus: {e}")
+            raise print(f"[WARN] Failed to merge WoS+Scopus: {e}")
 
     else:
         print("""
