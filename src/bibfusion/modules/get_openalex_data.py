@@ -17,11 +17,11 @@ def reconstruct_abstract(abstract_inverted_index: Dict[str, List[int]]) -> str:
 
 # --- 1) Generate the 'cited_references' column ---
 
-def get_openalex_references(doi: str) -> List[str]:
+def get_openalex_references(doi: str, API_KEY_OPENALEX: str) -> List[str]:
     clean = doi.replace('https://doi.org/', '').strip() or None
     if not clean:
         return []
-    url = f"https://api.openalex.org/works/doi:{clean}"
+    url = f"https://api.openalex.org/works/doi:{clean}?api_key={API_KEY_OPENALEX}"
     while True:
         try:
             r = requests.get(url, timeout=60); r.raise_for_status()
@@ -70,12 +70,13 @@ def get_openalex_references(doi: str) -> List[str]:
             return [] # Return empty list
 
 
-def generate_references_column(df: pd.DataFrame, doi_col: str = 'doi') -> pd.DataFrame:
+def generate_references_column(df: pd.DataFrame, API_KEY_OPENALEX: str, doi_col: str = 'doi') -> pd.DataFrame:
     """
     Generates the 'cited_references' column while keeping only 'SR' and the references.
 
     Args:
         df: DataFrame that must contain 'doi' and 'SR'
+        API_KEY_OPENALEX: OpenAlex API key
         doi_col: Name of the column containing the DOIs
 
     Returns:
@@ -93,7 +94,7 @@ def generate_references_column(df: pd.DataFrame, doi_col: str = 'doi') -> pd.Dat
         if not doi.strip():
             refs_list.append([])
         else:
-            refs_list.append(get_openalex_references(doi))
+            refs_list.append(get_openalex_references(doi, API_KEY_OPENALEX))
         time.sleep(0.5)  # Respect the API rate limit
     
     # Create new DataFrame with only the necessary columns
@@ -106,11 +107,11 @@ def generate_references_column(df: pd.DataFrame, doi_col: str = 'doi') -> pd.Dat
     return result_df
 
 # --- 2) Fetch and extract metadata for each reference ---
-def fetch_openalex_work(work_id: str) -> Optional[Dict[str, Any]]:
+def fetch_openalex_work(work_id: str, API_KEY_OPENALEX: str) -> Optional[Dict[str, Any]]:
     while True:
         try:
             # Timeout to prevent the request from hanging
-            r = requests.get(f"https://api.openalex.org/works/{work_id}", timeout=60)
+            r = requests.get(f"https://api.openalex.org/works/{work_id}?api_key={API_KEY_OPENALEX}", timeout=60)
             r.raise_for_status()
             return r.json()
         # Connection error handling
@@ -246,7 +247,7 @@ def extract_work_info(w: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
-def openalex_enrich_ref(df: pd.DataFrame, exclude_books: bool = True, audit_dropped_path: Optional[str] = None) -> pd.DataFrame:
+def openalex_enrich_ref(df: pd.DataFrame, API_KEY_OPENALEX: str, exclude_books: bool = True, audit_dropped_path: Optional[str] = None) -> pd.DataFrame:
     if 'cited_references' not in df.columns:
         raise ValueError("Missing 'cited_references' column. Run generate_references_column first.")
     
@@ -268,7 +269,7 @@ def openalex_enrich_ref(df: pd.DataFrame, exclude_books: bool = True, audit_drop
 
         for url in refs:
             wid = url.rstrip('/').split('/')[-1]
-            wd = fetch_openalex_work(wid)
+            wd = fetch_openalex_work(wid, API_KEY_OPENALEX)
             
             if not wd: 
                 rows.append({
@@ -320,7 +321,7 @@ def openalex_enrich_ref(df: pd.DataFrame, exclude_books: bool = True, audit_drop
                 'openalex_url': url
             })
             rows.append(info)
-            time.sleep(0.3)
+            time.sleep(0.5)
     
     enriched = pd.DataFrame(rows)
     # Optionally write audit of dropped items

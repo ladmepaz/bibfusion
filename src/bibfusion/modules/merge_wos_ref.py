@@ -103,22 +103,23 @@ def merge_wos_ref(wos_df: pd.DataFrame, wos_ref_enriched: pd.DataFrame) -> pd.Da
     combined_df = pd.concat([wos_df, wos_ref_cleaned], ignore_index=True)
     # "Concatenated wos_df and wos_ref_cleaned into combined_df.")
 
-    # Step 5: Remove Duplicates in 'SR' Column, Keeping 'ismainarticle' == 'TRUE'
+    # Step 5: Remove reference duplicates WITHOUT touching main articles
+
     if 'SR' in combined_df.columns:
-        # Removing duplicates in combined_df based on 'SR', keeping entries where 'ismainarticle' == 'TRUE'.
 
-        # Sort the dataframe so that rows with 'ismainarticle' == 'TRUE' come first
-        combined_df['ismainarticle_order'] = combined_df['ismainarticle'] == 'TRUE'
-        combined_df = combined_df.sort_values(by=['ismainarticle_order'], ascending=False)
+        main_df = combined_df[combined_df['ismainarticle'] == 'TRUE']
+        ref_df  = combined_df[combined_df['ismainarticle'] == 'FALSE']
 
-        # Remove duplicates based on 'SR', keeping the first occurrence
-        combined_df = combined_df.drop_duplicates(subset='SR', keep='first')
+        # Remove references that have same SR as a main article
+        ref_df = ref_df[~ref_df['SR'].isin(main_df['SR'])]
 
-        # Drop the temporary 'ismainarticle_order' column
-        combined_df = combined_df.drop(columns=['ismainarticle_order'])
+        # Remove duplicate references among themselves
+        ref_df = ref_df.drop_duplicates(subset='SR', keep='first')
 
-        # Removed duplicates in combined_df based on 'SR'.
+        # Combine back
+        combined_df = pd.concat([main_df, ref_df], ignore_index=True)
+
     else:
-        # "'SR' column not found in combined_df; cannot remove duplicates based on 'SR'."
-        None
+        pass
+
     return combined_df

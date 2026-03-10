@@ -36,6 +36,7 @@ def enrich_wos_with_openalex_authors(
     only_ids: bool = False,
     keep_raw: bool = True,
     uppercase_ascii: bool = True,
+    API_KEY_OPENALEX=None
 ) -> pd.DataFrame:
     """
     Given a WoS dataframe that contains a 'doi' column, query OpenAlex for each work
@@ -78,8 +79,9 @@ def enrich_wos_with_openalex_authors(
         doi = _clean_doi(doi_raw)
         if not doi:
             continue
-
-        url = f"https://api.openalex.org/works/doi:{doi}"
+        
+        API_KEY = API_KEY_OPENALEX
+        url = f"https://api.openalex.org/works/doi:{doi}?api_key={API_KEY}"
         params = {}
         if mailto:
             params['mailto'] = mailto
