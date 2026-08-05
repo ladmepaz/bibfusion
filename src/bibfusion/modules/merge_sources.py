@@ -94,29 +94,45 @@ def merge_articles(wos_article: pd.DataFrame,
 
     # emparejar 1 a 1 por DOI SIN colapsar duplicados internos
     merged_shared = []
+   # Map shared DOIs to the primary SR
+    doi_to_primary_sr_map = {}
 
     for doi in shared_dois:
 
         w_grp = wos_shared[wos_shared["__doi_norm"] == doi]
         s_grp = scopus_shared[scopus_shared["__doi_norm"] == doi]
 
-        # emparejar mínimo número común
+        # Match up to the minimum common count
         min_len = min(len(w_grp), len(s_grp))
 
         for i in range(min_len):
-            row = w_grp.iloc[i].copy()
+            w_row = w_grp.iloc[i].copy()
+            s_row = s_grp.iloc[i].copy()
+            
+            # Select the most complete record
+            best = _best_row([w_row, s_row])
+            fallback = s_row if best is w_row else w_row
+            
+            # Fill missing data in the primary record using the fallback
+            row = best.combine_first(fallback)
+            
             row["sources_merged"] = "wos;scopus"
-            row["ismain_wos"] = row["__is_main"]
-            row["ismain_scopus"] = s_grp.iloc[i]["__is_main"]
+            row["ismain_wos"] = w_row.get("__is_main", False)
+            row["ismain_scopus"] = s_row.get("__is_main", False)
             row["ismainarticle"] = row["ismain_wos"] or row["ismain_scopus"]
+            
+            # Store the primary SR to prevent orphaned authors and affiliations
+            if "SR" in row and pd.notna(row["SR"]):
+                doi_to_primary_sr_map[doi] = str(row["SR"])
+
             merged_shared.append(row)
 
-        # sobrantes quedan independientes
+        # Append remaining unmatched rows as independent records
         if len(w_grp) > min_len:
             for i in range(min_len, len(w_grp)):
                 row = w_grp.iloc[i].copy()
                 row["sources_merged"] = "wos"
-                row["ismain_wos"] = row["__is_main"]
+                row["ismain_wos"] = row.get("__is_main", False)
                 row["ismain_scopus"] = False
                 row["ismainarticle"] = row["ismain_wos"]
                 merged_shared.append(row)
@@ -126,13 +142,13 @@ def merge_articles(wos_article: pd.DataFrame,
                 row = s_grp.iloc[i].copy()
                 row["sources_merged"] = "scopus"
                 row["ismain_wos"] = False
-                row["ismain_scopus"] = row["__is_main"]
+                row["ismain_scopus"] = row.get("__is_main", False)
                 row["ismainarticle"] = row["ismain_scopus"]
                 merged_shared.append(row)
 
     merged_shared = pd.DataFrame(merged_shared)
 
-    # ===================== FILAS NO COMPARTIDAS =====================
+    # ===================== NON-SHARED ROWS =====================
     wos_only = wos[~wos["__doi_norm"].isin(shared_dois)].copy()
     scopus_only = scopus[~scopus["__doi_norm"].isin(shared_dois)].copy()
 
@@ -142,7 +158,7 @@ def merge_articles(wos_article: pd.DataFrame,
         df["ismain_scopus"] = df["__is_main"] if source == "scopus" else False
         df["ismainarticle"] = df["__is_main"]
 
-    # ===================== CONCAT FINAL =====================
+    # ===================== FINAL CONCAT =====================
     merged = pd.concat(
         [merged_shared, wos_only, scopus_only],
         ignore_index=True,
@@ -150,11 +166,12 @@ def merge_articles(wos_article: pd.DataFrame,
     )
 
     # ===================== SANITY CHECK =====================
-    print("WoS main merged:", int(merged["ismain_wos"].sum()))
-    print("Scopus main merged:", int(merged["ismain_scopus"].sum()))
-    print("Main después merge:", int(merged["ismainarticle"].sum()))
+    print("WoS main merged:", int(merged.get("ismain_wos", pd.Series([False])).sum()))
+    print("Scopus main merged:", int(merged.get("ismain_scopus", pd.Series([False])).sum()))
+    print("Main después merge:", int(merged.get("ismainarticle", pd.Series([False])).sum()))
 
-    return merged, {}
+    # Return the merged dataframe and the populated DOI mapping
+    return merged, doi_to_primary_sr_map
 
 
 def merge_authors(
@@ -691,3 +708,4 @@ def merge_all_entities(wos_dir: str, scopus_dir: str, out_dir: str) -> Dict[str,
     if 'all_scimago' in locals():
         result['All_Scimagodb'] = all_scimago
     return result
+
