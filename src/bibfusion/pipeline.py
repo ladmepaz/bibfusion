@@ -247,7 +247,7 @@ def preprocessing_df(path_wos=None, path_scopus=None, path_scimago=None, path_co
             API_KEY_OPENALEX=API_KEY_OPENALEX
         )
         scopus_df.to_csv(os.path.join(output_dir,'2-1_temp_scopus_df_openalex_authors.csv'), index=False)
-        # scopus_df_2 = pd.read_csv(os.path.join(output_dir,'2-1_temp_scopus_df_openalex_authors.csv'))
+        # scopus_df = pd.read_csv(os.path.join(output_dir,'2-1_temp_scopus_df_openalex_authors.csv'))
         print("2. Scopus authors enriched with OpenAlex (names/ORCID/IDs)")
 
         
