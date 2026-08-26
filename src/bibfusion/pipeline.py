@@ -57,11 +57,45 @@ def measure_time(func):
         return result
     return wrapper
 
+def _validate_paths(path_wos, path_scopus, path_scimago, path_country):
+    """
+    Checks that every supplied path points to an existing file.
+    Raises FileNotFoundError listing ALL missing paths at once,
+    so the user can fix everything in a single pass instead of
+    discovering broken paths one by one after hours of processing.
+    """
+    errors = []
+ 
+    if path_wos:
+        paths = [path_wos] if isinstance(path_wos, str) else path_wos
+        for p in paths:
+            if not p or not os.path.isfile(p):
+                errors.append(f"  [WoS]     {p}")
+ 
+    if path_scopus is not None and not os.path.isfile(path_scopus):
+        errors.append(f"  [Scopus]  {path_scopus}")
+ 
+    if path_scimago is not None and not os.path.isfile(path_scimago):
+        errors.append(f"  [Scimago] {path_scimago}")
+ 
+    if path_country is not None and not os.path.isfile(path_country):
+        errors.append(f"  [Country] {path_country}")
+ 
+    if errors:
+        raise FileNotFoundError(
+            "Aborting: the following paths do not exist or are not readable.\n"
+            "Fix them all before running again:\n"
+            + "\n".join(errors)
+        )
+
 @measure_time
 def preprocessing_df(path_wos=None, path_scopus=None, path_scimago=None, path_country=None, API_KEY_OPENALEX=None):
     """
     Preprocessing the DataFrames of WoS and Scopus.
     """
+
+    _validate_paths(path_wos, path_scopus, path_scimago, path_country)
+
     if path_wos:
         if isinstance(path_wos, str):
             path_wos = [path_wos]
